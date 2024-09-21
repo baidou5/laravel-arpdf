@@ -1,6 +1,7 @@
 {
     "name": "baidouabdellah/laravel-arpdf",
     "description": "A Laravel package for generating PDF files with support for both English and Arabic languages without relying on external libraries.",
+     "version": "1.0.1",
     "type": "library",
     "require": {
         "illuminate/support": "^11.23"
