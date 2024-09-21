@@ -1,0 +1,20 @@
+{
+    "name": "baidouabdellah/laravel-arpdf",
+    "description": "A Laravel package for generating PDF files with support for both English and Arabic languages without relying on external libraries.",
+    "type": "library",
+    "require": {
+        "illuminate/support": "^11.23"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Baidouabdellah\\LaravelArpdf\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Abdellah Baidou",
+            "email": "baidou.abd@gmail.com"
+        }
+    ]
+}
