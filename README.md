@@ -80,7 +80,7 @@ $pdf->output('sample.pdf');
 
 If you encounter any issues, please open an issue on the [GitHub repository](https://github.com/baidou5/laravel-arpdf/issues).
  
-# pleas Contact me 
+# if you have any question please contact me
 Abdellah Baidou
 Phone: +212 661-176711
 Email: baidou.abd@gmail.com
