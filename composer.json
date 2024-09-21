@@ -16,5 +16,8 @@
             "name": "Abdellah Baidou",
             "email": "baidou.abd@gmail.com"
         }
-    ]
+    ],
+    "require-dev": {
+        "phpunit/phpunit": "^11.3"
+    }
 }
