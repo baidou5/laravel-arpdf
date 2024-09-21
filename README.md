@@ -49,6 +49,32 @@ $pdf->addPage();
 $pdf->writeHTML('<h1>Hello World</h1>');
 $pdf->output('sample.pdf');
 ```
+### Customizing Arabic Font
+If you need to customize the Arabic font used in the PDFs, follow these steps:
+
+1. **Add the Arabic font files**:
+   Place your Arabic font files (e.g., TTF or OTF) in the `resources/fonts` directory of your Laravel project.
+
+2. **Configure the font in your code**:
+   In your PDF generation code, you can specify the font like this:
+
+   ```php
+   $pdf = app('ArPDF');
+   $pdf->setFont('path/to/your/font.ttf'); // Specify the path to your Arabic font
+    ```
+3. **Ensure the font supports Arabic characters**:
+     Make sure the font you are using supports Arabic characters to display them correctly in the PDF.
+
+4. **Example of setting the Arabic font:**
+  Here’s an example of how to set an Arabic font in your PDF:
+```php
+$pdf = app('ArPDF');
+$pdf->setTitle('Sample PDF');
+$pdf->addPage();
+$pdf->setFont('resources/fonts/YourArabicFont.ttf');
+$pdf->writeHTML('<h1>مرحبا بالعالم</h1>'); // Example of Arabic text
+$pdf->output('sample.pdf');
+ ```
 
 ## Support
 
@@ -61,5 +87,6 @@ Email: baidou.abd@gmail.com
 
 ## License
 
+ 
 This package is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
-```
+ 
