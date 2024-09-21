@@ -3,7 +3,7 @@
         'name' => 'baidouabdellah/laravel-arpdf',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'e469bfa175cc2e0f6c1db3ae57bb17dd37567a3a',
+        'reference' => 'c9836c6678e95f4c7fb4d3d529e797ae1f9a17f2',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -13,7 +13,7 @@
         'baidouabdellah/laravel-arpdf' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'e469bfa175cc2e0f6c1db3ae57bb17dd37567a3a',
+            'reference' => 'c9836c6678e95f4c7fb4d3d529e797ae1f9a17f2',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
