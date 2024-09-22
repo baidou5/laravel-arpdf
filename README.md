@@ -1,4 +1,4 @@
-#### Laravel ArPDF
+![ArPDF Logo](https://raw.githubusercontent.com/baidou5/laravel-arpdf/main/arpdf.jpg)
 # Laravel ArPDF
 
 A Laravel package for generating PDF files with support for both English and Arabic languages without relying on external libraries.
