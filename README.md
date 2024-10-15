@@ -10,7 +10,7 @@ To install the `laravel-arpdf` package, follow these steps:
 1. **Add the package to your Laravel project using Composer**:
 
    ```bash
-   composer require baidouabdellah/laravel-arpdf
+   composer require baidouabdellah/laravel-arpdf:dev-main
    ```
 
 2. **Register the Service Provider (if using Laravel < 5.5)**:
