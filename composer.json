@@ -1,10 +1,10 @@
 {
     "name": "baidouabdellah/laravel-arpdf",
-    "description": "A Laravel package for generating PDF files with support for both English and Arabic languages without relying on external libraries.",
-     "version": "1.0.1",
+    "description": "A Laravel package for generating PDF files with Full support Arabic languages.",
+    "version": "1.0.2",
     "type": "library",
     "require": {
-    "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0"
+        "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0"
     },
     "license": "MIT",
     "autoload": {
@@ -22,5 +22,19 @@
         "phpunit/phpunit": "^11.3"
     },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "keywords": [
+        "laravel",
+        "pdf",
+        "html",
+        "css",
+        "arabic",
+        "fonts",
+        "package"
+    ],
+    "homepage": "https://github.com/baidou5/laravel-arpdf",
+    "support": {
+        "issues": "https://github.com/baidou5/laravel-arpdf/issues",
+        "source": "https://github.com/baidou5/laravel-arpdf"
+    }
 }

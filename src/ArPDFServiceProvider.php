@@ -16,6 +16,6 @@ class ArPDFServiceProvider extends ServiceProvider
     public function boot()
     {
         // You can add any actions you need while loading the package.
-        
+
     }
 }

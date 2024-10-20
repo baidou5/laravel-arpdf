@@ -1,5 +1,10 @@
 <?php
+
 namespace Baidouabdellah\LaravelArpdf;
+
+use Baidouabdellah\LaravelArpdf\FontManager;
+use Baidouabdellah\LaravelArpdf\HtmlParser;
+use Baidouabdellah\LaravelArpdf\CssParser;
 
 class ArPDF
 {
@@ -9,7 +14,7 @@ class ArPDF
 
     public function __construct()
     {
-        $this->content = "%PDF-1.7\n"; //start PDF file
+        $this->content = "%PDF-1.7\n";
         $this->addDefaultFonts();
     }
 
@@ -19,22 +24,22 @@ class ArPDF
         return $this;
     }
 
-    public function addArabicText($x, $y, $size, $text, $font = 'F2')
+    public function addHtml($html)
     {
-        $text = $this->flipArabicText($text);
-        $this->addText($x, $y, $size, $text, $font);
-        return $this;
-    }
+        $parser = new HtmlParser($html);
+        $elements = $parser->parse();
 
-    protected function flipArabicText($text)
-    {
-        return implode('', array_reverse(mb_str_split($text)));
+        foreach ($elements as $element) {
+            $css = new CssParser($element['style']);
+            $this->addText($element['x'], $element['y'], $element['size'], $element['text'], $css->getFont());
+        }
+        return $this;
     }
 
     protected function addDefaultFonts()
     {
-        $this->content .= "F1 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
-        $this->content .= "F2 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"; // للخطوط العربية
+        $fontManager = new FontManager();
+        $this->content .= $fontManager->getDefaultFontObjects();
     }
 
     public function renderContent()
