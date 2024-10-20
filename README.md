@@ -31,11 +31,35 @@ To install the `laravel-arpdf` package, follow these steps:
 
 ## Usage
 
-To use the package, you can access the PDF generation functionality using the following command:
+To use the package, you can access the PDF generation functionality in your controller:
+
+Demo Controller
 
 ```php
-$pdf = app('ArPDF');
-// Add your PDF generation logic here
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Baidouabdellah\LaravelArpdf\ArPDF;
+
+class PdfController extends Controller
+{
+    public function generatePdf()
+    {
+        $pdf = app(ArPDF::class);
+
+        // Example of adding text
+        $pdf->addText(50, 800, 12, 'Hello World');
+        $pdf->addArabicText(50, 780, 12, 'مرحبا بالعالم');
+
+        // Save or stream the PDF
+        $pdf->save('output/sample.pdf');
+        // Or stream directly to the browser
+        // $pdf->stream('document.pdf');
+    }
+}
+
 ```
 
 ### Generating a PDF
@@ -79,7 +103,7 @@ $pdf->output('sample.pdf');
 ## Support
 
 If you encounter any issues, please open an issue on the [GitHub repository](https://github.com/baidou5/laravel-arpdf/issues).
- 
+
 ---
 - **Abdellah Baidou**
 - Phone: +212 661-176711
@@ -89,6 +113,5 @@ If you encounter any issues, please open an issue on the [GitHub repository](htt
 
 ## License
 
- 
+
 This package is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
- 
