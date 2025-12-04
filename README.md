@@ -11,7 +11,7 @@ A Laravel package for generating **PDF files with full Arabic and English suppor
 - ✔️ Fully supports **Arabic**, **RTL**, **UTF-8**, and mixed languages  
 - ✔️ Clean & simple **Laravel-style API**  
 - ✔️ Includes **Facade** + **Auto-Discovery**  
-- ✔️ Works with **Laravel 8, 9, 10, 11**  
+- ✔️ Works with **Laravel 8, 9, 10, 11, 12**  
 - ✔️ Supports **custom Arabic fonts** (Cairo, Amiri, etc.)  
 - ✔️ High-quality rendering powered by **mPDF**  
 - ✔️ Save, download, or stream PDFs from your controller  
@@ -54,7 +54,8 @@ This allows customizing fonts, default direction (RTL/LTR), and mPDF settings.
 ### Controller Demo
 
 ```php
-use ArPDF;
+use Baidouabdellah\LaravelArpdf\Facades\ArPDF;
+
 
 public function testPdf()
 {
@@ -63,7 +64,7 @@ public function testPdf()
 
     return ArPDF::direction('rtl')
         ->loadHTML($html)
-        ->download('example.pdf');
+        ->download('example.pdf'); //stream or download
 }
 ```
 
@@ -82,7 +83,7 @@ Create a view such as:
     <meta charset="UTF-8">
     <style>
         body {
-            font-family: 'dejavusans';
+            font-family: 'cairo';
             direction: rtl;
             text-align: right;
         }
