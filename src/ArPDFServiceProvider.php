@@ -8,19 +8,43 @@ class ArPDFServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // نسجّل الـ ArPDF كـ singleton في الـ container
+        // دمج ملف الإعدادات
+        $this->mergeConfigFrom(
+            __DIR__ . '/../config/arpdf.php',
+            'arpdf'
+        );
+
+        // تسجيل الـ ArPDF في الـ container
         $this->app->singleton(ArPDF::class, function ($app) {
-            return new ArPDF();
+            // نمرر إعدادات من config إلى الكلاس
+            $config = [
+                'directionality' => config('arpdf.direction', 'rtl'),
+                'default_font'   => config('arpdf.default_font', 'cairo'),
+                'tempDir'        => config('arpdf.temp_dir', storage_path('app/laravel-arpdf')),
+            ];
+
+            return new ArPDF($config);
         });
 
-        // Alias لإسم الخدمة عشان تستخدمه الـ Facade
         $this->app->alias(ArPDF::class, 'ArPDF');
     }
 
     public function boot(): void
     {
-        // في المستقبل تقدر تضيف:
-        // - نشر ملف config
-        // - نشر خطوط عربية، إلخ...
+        // نشر ملف الإعدادات
+        $this->publishes([
+            __DIR__ . '/../config/arpdf.php' => config_path('arpdf.php'),
+        ], 'arpdf-config');
+
+        // نشر الخطوط
+        $this->publishes([
+            __DIR__ . '/../resources/fonts' => resource_path('fonts/arpdf'),
+        ], 'arpdf-fonts');
+
+        // نشر الكل معًا
+        $this->publishes([
+            __DIR__ . '/../config/arpdf.php' => config_path('arpdf.php'),
+            __DIR__ . '/../resources/fonts'  => resource_path('fonts/arpdf'),
+        ], 'arpdf');
     }
 }
