@@ -3,8 +3,6 @@
 namespace Baidouabdellah\LaravelArpdf;
 
 use Mpdf\Mpdf;
-use Mpdf\Config\ConfigVariables;
-use Mpdf\Config\FontVariables;
 
 class ArPDF
 {
@@ -12,12 +10,14 @@ class ArPDF
 
     public function __construct(array $config = [])
     {
+        // مجلد مؤقت داخل storage
         $tempDir = storage_path('app/laravel-arpdf');
-    
+
         if (! is_dir($tempDir)) {
             @mkdir($tempDir, 0775, true);
         }
-    
+
+        // إعدادات افتراضية مناسبة للعربية
         $default = [
             'mode'              => 'utf-8',
             'format'            => 'A4',
@@ -35,17 +35,15 @@ class ArPDF
             'autoScriptToLang'  => true,
             'directionality'    => 'rtl',
         ];
-    
-        $settings = array_merge($default, $config);
-    
-        $this->mpdf = new Mpdf($settings);
-    }
-    
 
-     
+        $settings = array_merge($default, $config);
+
+        $this->mpdf = new Mpdf($settings);
+        // لا نلمس fontDir ولا fontdata مباشرة في mPDF 8
+    }
 
     /**
-     * تحميل HTML (مع CSS لو حابب)
+     * تحميل HTML
      */
     public function loadHTML(string $html, int $mode = \Mpdf\HTMLParserMode::DEFAULT_MODE): self
     {
@@ -85,7 +83,7 @@ class ArPDF
     }
 
     /**
-     * إرجاع استجابة Laravel لعرض PDF في المتصفح (inline)
+     * عرض PDF في المتصفح (inline)
      */
     public function stream(string $filename = 'document.pdf')
     {
@@ -98,7 +96,7 @@ class ArPDF
     }
 
     /**
-     * إرجاع استجابة Laravel لتحميل الملف (download)
+     * تحميل PDF (download)
      */
     public function download(string $filename = 'document.pdf')
     {
