@@ -3,34 +3,43 @@
 namespace Baidouabdellah\LaravelArpdf;
 
 use Mpdf\Mpdf;
+use Mpdf\Config\ConfigVariables;
+use Mpdf\Config\FontVariables;
+use Mpdf\HTMLParserMode;
+use Mpdf\Output\Destination;
 
 class ArPDF
 {
     protected Mpdf $mpdf;
 
+    /**
+     * ArPDF constructor.
+     *
+     * يمكنك تمرير إعدادات إضافية من عندك عبر $overrideConfig
+     */
     public function __construct(array $overrideConfig = [])
     {
-<<<<<<< HEAD
-        // نقرأ من config (ممكن تكون غير منشورة بعد، فيستخدم الافتراضي من الباكدج)
-        $direction          = $overrideConfig['directionality'] ?? config('arpdf.direction', 'rtl');
-        $defaultFont        = $overrideConfig['default_font'] ?? config('arpdf.default_font', 'cairo');
-        $tempDir            = $overrideConfig['tempDir'] ?? config('arpdf.temp_dir', storage_path('app/laravel-arpdf'));
-        $publishedFontsPath = config('arpdf.fonts_path', resource_path('fonts/arpdf'));
-=======
-        // مجلد مؤقت داخل storage
-        $tempDir = storage_path('app/laravel-arpdf');
->>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
+        // نقرأ من config (لو مش منشورة يرجع للقيم الافتراضية)
+        $direction       = $overrideConfig['directionality'] ?? config('arpdf.direction', 'rtl');
+        $defaultFont     = $overrideConfig['default_font']    ?? config('arpdf.default_font', 'cairo');
+        $tempDir         = $overrideConfig['tempDir']         ?? config('arpdf.temp_dir', storage_path('app/laravel-arpdf'));
+        $publishedFonts  = $overrideConfig['fonts_path']      ?? config('arpdf.fonts_path', resource_path('fonts/arpdf'));
 
         if (! is_dir($tempDir)) {
             @mkdir($tempDir, 0775, true);
         }
 
-<<<<<<< HEAD
         // إعدادات mPDF الافتراضية
-=======
-        // إعدادات افتراضية مناسبة للعربية
->>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
-        $default = [
+        $defaultConfig = (new ConfigVariables())->getDefaults();
+        $fontDirs      = $defaultConfig['fontDir'];
+
+        $fontConfig = (new FontVariables())->getDefaults();
+        $fontData   = $fontConfig['fontdata'];
+
+        // الخطوط الإضافية من config/arpdf.php
+        $extraFonts = config('arpdf.fonts', []);
+
+        $mpdfConfig = array_merge([
             'mode'              => 'utf-8',
             'format'            => 'A4',
             'orientation'       => 'P',
@@ -45,58 +54,37 @@ class ArPDF
             'autoLangToFont'    => true,
             'autoScriptToLang'  => true,
             'directionality'    => $direction,
-        ];
 
-<<<<<<< HEAD
-        // إعدادات mPDF الأصلية
-        $defaultConfig = (new ConfigVariables())->getDefaults();
-        $fontDirs      = $defaultConfig['fontDir'];
+            // أهم حاجة: نضيف مجلد الخطوط ونعرّف fontdata
+            'fontDir'           => array_merge($fontDirs, [$publishedFonts]),
+            'fontdata'          => $fontData + $extraFonts,
+            'default_font'      => $defaultFont,
+        ], $overrideConfig);
 
-        $fontConfig = (new FontVariables())->getDefaults();
-        $fontData   = $fontConfig['fontdata'];
-
-        // نقرأ الخطوط من config (name => files array)
-        $extraFonts = config('arpdf.fonts', []);
-
-        // نبني fontdata من config
-        $extraFontData = [];
-        foreach ($extraFonts as $name => $files) {
-            $extraFontData[$name] = $files;
-        }
-
-        // ندمج إعداداتنا مع الافتراضية
-        $mpdfConfig = array_merge($default, [
-            'fontDir'  => array_merge($fontDirs, [$publishedFontsPath]),
-            'fontdata' => $fontData + $extraFontData,
-            'default_font' => $defaultFont,
-        ]);
-
-        // إنشاء mPDF
         $this->mpdf = new Mpdf($mpdfConfig);
 
-        // إجبار استخدام الخط الافتراضي لو تم تحديده
-        if (! empty($defaultFont)) {
+        // نضمن استعمال الخط الافتراضي
+        if ($defaultFont) {
             $this->mpdf->SetFont($defaultFont);
         }
     }
 
     /**
-     * تحميل HTML إلى المستند
-=======
-        $settings = array_merge($default, $config);
-
-        $this->mpdf = new Mpdf($settings);
-        // لا نلمس fontDir ولا fontdata مباشرة في mPDF 8
-    }
-
-    /**
-     * تحميل HTML
->>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
+     * تحميل HTML (سلسلي)
      */
-    public function loadHTML(string $html, int $mode = \Mpdf\HTMLParserMode::DEFAULT_MODE): self
+    public function loadHTML(string $html, int $mode = HTMLParserMode::DEFAULT_MODE): self
     {
         $this->mpdf->WriteHTML($html, $mode);
         return $this;
+    }
+
+    /**
+     * تحميل View Blade مباشرة
+     */
+    public function loadView(string $view, array $data = [], int $mode = HTMLParserMode::DEFAULT_MODE): self
+    {
+        $html = view($view, $data)->render();
+        return $this->loadHTML($html, $mode);
     }
 
     /**
@@ -104,12 +92,12 @@ class ArPDF
      */
     public function loadCSS(string $css): self
     {
-        $this->mpdf->WriteHTML($css, \Mpdf\HTMLParserMode::HEADER_CSS);
+        $this->mpdf->WriteHTML($css, HTMLParserMode::HEADER_CSS);
         return $this;
     }
 
     /**
-     * تغيير اتجاه المستند (rtl / ltr)
+     * تغيير اتجاه الصفحة (RTL أو LTR)
      */
     public function direction(string $dir = 'rtl'): self
     {
@@ -118,24 +106,20 @@ class ArPDF
     }
 
     /**
-     * حفظ الملف على القرص
+     * حفظ الملف على السيرفر
      */
     public function save(string $path): self
     {
-        $this->mpdf->Output($path, \Mpdf\Output\Destination::FILE);
+        $this->mpdf->Output($path, Destination::FILE);
         return $this;
     }
 
     /**
-<<<<<<< HEAD
      * عرض PDF داخل المتصفح (inline)
-=======
-     * عرض PDF في المتصفح (inline)
->>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
      */
     public function stream(string $filename = 'document.pdf')
     {
-        $content = $this->mpdf->Output($filename, \Mpdf\Output\Destination::STRING_RETURN);
+        $content = $this->mpdf->Output($filename, Destination::STRING_RETURN);
 
         return response($content, 200, [
             'Content-Type'        => 'application/pdf',
@@ -148,11 +132,36 @@ class ArPDF
      */
     public function download(string $filename = 'document.pdf')
     {
-        $content = $this->mpdf->Output($filename, \Mpdf\Output\Destination::STRING_RETURN);
+        $content = $this->mpdf->Output($filename, Destination::STRING_RETURN);
 
         return response($content, 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
+    }
+
+    /**
+     * واجهة مباشرة لـ mPDF::Output (للي يحب يستخدمها)
+     */
+    public function output(string $filename = 'document.pdf', string $dest = Destination::INLINE)
+    {
+        return $this->mpdf->Output($filename, $dest);
+    }
+
+    /**
+     * للتوافق مع الكود القديم اللي يستعمل render()
+     */
+    public function render(string $html, string $fileName = 'document.pdf', string $dest = 'I')
+    {
+        $this->mpdf->WriteHTML($html);
+        return $this->mpdf->Output($fileName, $dest);
+    }
+
+    /**
+     * ترجيع كائن mPDF لو حبيت تتعامل معه مباشرة
+     */
+    public function getMpdf(): Mpdf
+    {
+        return $this->mpdf;
     }
 }
