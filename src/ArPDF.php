@@ -3,8 +3,6 @@
 namespace Baidouabdellah\LaravelArpdf;
 
 use Mpdf\Mpdf;
-use Mpdf\Config\ConfigVariables;
-use Mpdf\Config\FontVariables;
 
 class ArPDF
 {
@@ -12,17 +10,26 @@ class ArPDF
 
     public function __construct(array $overrideConfig = [])
     {
+<<<<<<< HEAD
         // نقرأ من config (ممكن تكون غير منشورة بعد، فيستخدم الافتراضي من الباكدج)
         $direction          = $overrideConfig['directionality'] ?? config('arpdf.direction', 'rtl');
         $defaultFont        = $overrideConfig['default_font'] ?? config('arpdf.default_font', 'cairo');
         $tempDir            = $overrideConfig['tempDir'] ?? config('arpdf.temp_dir', storage_path('app/laravel-arpdf'));
         $publishedFontsPath = config('arpdf.fonts_path', resource_path('fonts/arpdf'));
+=======
+        // مجلد مؤقت داخل storage
+        $tempDir = storage_path('app/laravel-arpdf');
+>>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
 
         if (! is_dir($tempDir)) {
             @mkdir($tempDir, 0775, true);
         }
 
+<<<<<<< HEAD
         // إعدادات mPDF الافتراضية
+=======
+        // إعدادات افتراضية مناسبة للعربية
+>>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
         $default = [
             'mode'              => 'utf-8',
             'format'            => 'A4',
@@ -40,6 +47,7 @@ class ArPDF
             'directionality'    => $direction,
         ];
 
+<<<<<<< HEAD
         // إعدادات mPDF الأصلية
         $defaultConfig = (new ConfigVariables())->getDefaults();
         $fontDirs      = $defaultConfig['fontDir'];
@@ -74,6 +82,16 @@ class ArPDF
 
     /**
      * تحميل HTML إلى المستند
+=======
+        $settings = array_merge($default, $config);
+
+        $this->mpdf = new Mpdf($settings);
+        // لا نلمس fontDir ولا fontdata مباشرة في mPDF 8
+    }
+
+    /**
+     * تحميل HTML
+>>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
      */
     public function loadHTML(string $html, int $mode = \Mpdf\HTMLParserMode::DEFAULT_MODE): self
     {
@@ -109,7 +127,11 @@ class ArPDF
     }
 
     /**
+<<<<<<< HEAD
      * عرض PDF داخل المتصفح (inline)
+=======
+     * عرض PDF في المتصفح (inline)
+>>>>>>> ce37a1cbe35ef647e1e6bf6207699cdda59662ad
      */
     public function stream(string $filename = 'document.pdf')
     {
