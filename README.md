@@ -1,117 +1,147 @@
 ![ArPDF Logo](https://raw.githubusercontent.com/baidou5/laravel-arpdf/main/arpdf.jpg)
+
 # Laravel ArPDF
 
-A Laravel package for generating PDF files with support for both English and Arabic languages without relying on external libraries.
-
-## Installation
-
-To install the `laravel-arpdf` package, follow these steps:
-
-1. **Add the package to your Laravel project using Composer**:
-
-   ```bash
-   composer require baidouabdellah/laravel-arpdf:dev-main
-   ```
-
-2. **Register the Service Provider (if using Laravel < 5.5)**:
-
-   In your `config/app.php` file, add the following line to the `providers` array:
-
-   ```php
-   Baidouabdellah\LaravelArpdf\ArPDFServiceProvider::class,
-   ```
-
-3. **Publish the configuration file (optional)**:
-
-   You can publish the configuration file to customize the package settings:
-
-   ```bash
-   php artisan vendor:publish --provider="Baidouabdellah\LaravelArpdf\ArPDFServiceProvider"
-   ```
-
-## Usage
-
-To use the package, you can access the PDF generation functionality in your controller:
-
-Demo Controller
-
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use Baidouabdellah\LaravelArpdf\ArPDF;
-
-class PdfController extends Controller
-{
-    public function generatePdf()
-    {
-        $pdf = app(ArPDF::class);
-
-        // Example of adding text
-        $pdf->addText(50, 800, 12, 'Hello World');
-        $pdf->addArabicText(50, 780, 12, 'مرحبا بالعالم');
-
-        // Save or stream the PDF
-        $pdf->save('output/sample.pdf');
-        // Or stream directly to the browser
-        // $pdf->stream('document.pdf');
-    }
-}
-
-```
-
-### Generating a PDF
-
-Here’s an example of how to generate a simple PDF:
-
-```php
-$pdf = app('ArPDF');
-$pdf->setTitle('Sample PDF');
-$pdf->addPage();
-$pdf->writeHTML('<h1>Hello World</h1>');
-$pdf->output('sample.pdf');
-```
-### Customizing Arabic Font
-If you need to customize the Arabic font used in the PDFs, follow these steps:
-
-1. **Add the Arabic font files**:
-   Place your Arabic font files (e.g., TTF or OTF) in the `resources/fonts` directory of your Laravel project.
-
-2. **Configure the font in your code**:
-   In your PDF generation code, you can specify the font like this:
-
-   ```php
-   $pdf = app('ArPDF');
-   $pdf->setFont('path/to/your/font.ttf'); // Specify the path to your Arabic font
-    ```
-3. **Ensure the font supports Arabic characters**:
-     Make sure the font you are using supports Arabic characters to display them correctly in the PDF.
-
-4. **Example of setting the Arabic font:**
-  Here’s an example of how to set an Arabic font in your PDF:
-```php
-$pdf = app('ArPDF');
-$pdf->setTitle('Sample PDF');
-$pdf->addPage();
-$pdf->setFont('resources/fonts/YourArabicFont.ttf');
-$pdf->writeHTML('<h1>مرحبا بالعالم</h1>'); // Example of Arabic text
-$pdf->output('sample.pdf');
- ```
-
-## Support
-
-If you encounter any issues, please open an issue on the [GitHub repository](https://github.com/baidou5/laravel-arpdf/issues).
+A Laravel package for generating **PDF files with full Arabic and English support**, including **UTF-8**, **RTL**, and **custom font integration**, using the powerful **mPDF** engine — all **without relying on external services**.
 
 ---
-- **Abdellah Baidou**
-- Phone: +212 661-176711
-- Email: baidou.abd@gmail.com
 
-----
+## 🚀 Features
 
-## License
+- ✔️ Fully supports **Arabic**, **RTL**, **UTF-8**, and mixed languages  
+- ✔️ Clean & simple **Laravel-style API**  
+- ✔️ Includes **Facade** + **Auto-Discovery**  
+- ✔️ Works with **Laravel 8, 9, 10, 11**  
+- ✔️ Supports **custom Arabic fonts** (Cairo, Amiri, etc.)  
+- ✔️ High-quality rendering powered by **mPDF**  
+- ✔️ Save, download, or stream PDFs from your controller  
 
+---
 
-This package is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
+## 📦 Installation
+
+Install the package via Composer:
+
+```bash
+composer require baidouabdellah/laravel-arpdf
+```
+
+### ✔ Laravel 8+  
+No configuration is required — Laravel automatically discovers the package.
+
+### ✔ For Laravel < 8 (Manual Registration)
+
+Add the service provider to `config/app.php`:
+
+```php
+'providers' => [
+    Baidouabdellah\LaravelArpdf\ArPDFServiceProvider::class,
+],
+```
+
+### (Optional) Publish Configuration
+
+```bash
+php artisan vendor:publish --provider="Baidouabdellah\LaravelArpdf\ArPDFServiceProvider"
+```
+
+This allows customizing fonts, default direction (RTL/LTR), and mPDF settings.
+
+---
+
+## 🧪 Usage Example
+
+### Controller Demo
+
+```php
+use ArPDF;
+
+public function testPdf()
+{
+    $html = '<h1 style="text-align:right">مرحبا بالعالم</h1>
+             <p>هذا مثال PDF باستخدام Laravel ArPDF.</p>';
+
+    return ArPDF::direction('rtl')
+        ->loadHTML($html)
+        ->download('example.pdf');
+}
+```
+
+---
+
+## 📄 Blade View Example
+
+Create a view such as:
+
+`resources/views/pdf/invoice.blade.php`
+
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'dejavusans';
+            direction: rtl;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ $title }}</h1>
+    <p>مرحبا بك في نظام الفواتير.</p>
+</body>
+</html>
+```
+
+Render and export:
+
+```php
+$html = view('pdf.invoice', [
+    'title' => 'فاتورة رقم 123'
+])->render();
+
+return ArPDF::loadHTML($html)->download('invoice-123.pdf');
+```
+
+---
+
+## 🔤 Custom Arabic Fonts
+
+mPDF supports custom fonts such as **Cairo**, **Amiri**, **Scheherazade**, etc.
+
+To use your own fonts:
+
+1. Place fonts inside a folder, e.g.:  
+   `resources/fonts/`
+2. Register them inside `ArPDF.php` (font bootstrap section)
+3. Use them in CSS:
+
+```css
+body {
+    font-family: 'cairo';
+}
+```
+
+---
+
+## 📞 Support
+
+If you encounter any issue, feel free to open a ticket here:  
+👉 https://github.com/baidou5/laravel-arpdf/issues
+
+---
+
+### 👤 Author
+
+**Abdellah Baidou**  
+📱 Phone: **+212 661-176711**  
+📧 Email: **baidou.abd@gmail.com**
+
+---
+
+## 📄 License
+
+This package is licensed under the **MIT License**.  
+See the [LICENSE](LICENSE) file for more information.
