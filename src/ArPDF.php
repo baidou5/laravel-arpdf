@@ -13,9 +13,9 @@ class ArPDF
     public function __construct(array $overrideConfig = [])
     {
         // نقرأ من config (ممكن تكون غير منشورة بعد، فيستخدم الافتراضي من الباكدج)
-        $direction  = $overrideConfig['directionality'] ?? config('arpdf.direction', 'rtl');
-        $defaultFont = $overrideConfig['default_font'] ?? config('arpdf.default_font', 'cairo');
-        $tempDir    = $overrideConfig['tempDir'] ?? config('arpdf.temp_dir', storage_path('app/laravel-arpdf'));
+        $direction          = $overrideConfig['directionality'] ?? config('arpdf.direction', 'rtl');
+        $defaultFont        = $overrideConfig['default_font'] ?? config('arpdf.default_font', 'cairo');
+        $tempDir            = $overrideConfig['tempDir'] ?? config('arpdf.temp_dir', storage_path('app/laravel-arpdf'));
         $publishedFontsPath = config('arpdf.fonts_path', resource_path('fonts/arpdf'));
 
         if (! is_dir($tempDir)) {
@@ -47,7 +47,7 @@ class ArPDF
         $fontConfig = (new FontVariables())->getDefaults();
         $fontData   = $fontConfig['fontdata'];
 
-        // نقرأ الخطوط من config (names => files)
+        // نقرأ الخطوط من config (name => files array)
         $extraFonts = config('arpdf.fonts', []);
 
         // نبني fontdata من config
@@ -56,7 +56,7 @@ class ArPDF
             $extraFontData[$name] = $files;
         }
 
-        // ندمج إعداداتنا
+        // ندمج إعداداتنا مع الافتراضية
         $mpdfConfig = array_merge($default, [
             'fontDir'  => array_merge($fontDirs, [$publishedFontsPath]),
             'fontdata' => $fontData + $extraFontData,
@@ -66,36 +66,51 @@ class ArPDF
         // إنشاء mPDF
         $this->mpdf = new Mpdf($mpdfConfig);
 
-        // إجبار استخدام الخط الافتراضي
-        if ($defaultFont) {
+        // إجبار استخدام الخط الافتراضي لو تم تحديده
+        if (! empty($defaultFont)) {
             $this->mpdf->SetFont($defaultFont);
         }
     }
 
+    /**
+     * تحميل HTML إلى المستند
+     */
     public function loadHTML(string $html, int $mode = \Mpdf\HTMLParserMode::DEFAULT_MODE): self
     {
         $this->mpdf->WriteHTML($html, $mode);
         return $this;
     }
 
+    /**
+     * تحميل CSS منفصل
+     */
     public function loadCSS(string $css): self
     {
         $this->mpdf->WriteHTML($css, \Mpdf\HTMLParserMode::HEADER_CSS);
         return $this;
     }
 
+    /**
+     * تغيير اتجاه المستند (rtl / ltr)
+     */
     public function direction(string $dir = 'rtl'): self
     {
         $this->mpdf->SetDirectionality($dir);
         return $this;
     }
 
+    /**
+     * حفظ الملف على القرص
+     */
     public function save(string $path): self
     {
         $this->mpdf->Output($path, \Mpdf\Output\Destination::FILE);
         return $this;
     }
 
+    /**
+     * عرض PDF داخل المتصفح (inline)
+     */
     public function stream(string $filename = 'document.pdf')
     {
         $content = $this->mpdf->Output($filename, \Mpdf\Output\Destination::STRING_RETURN);
@@ -106,6 +121,9 @@ class ArPDF
         ]);
     }
 
+    /**
+     * تحميل PDF (download)
+     */
     public function download(string $filename = 'document.pdf')
     {
         $content = $this->mpdf->Output($filename, \Mpdf\Output\Destination::STRING_RETURN);
