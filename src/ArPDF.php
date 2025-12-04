@@ -2,64 +2,138 @@
 
 namespace Baidouabdellah\LaravelArpdf;
 
-use Baidouabdellah\LaravelArpdf\FontManager;
-use Baidouabdellah\LaravelArpdf\HtmlParser;
-use Baidouabdellah\LaravelArpdf\CssParser;
+use Mpdf\Mpdf;
+use Mpdf\Config\ConfigVariables;
+use Mpdf\Config\FontVariables;
 
 class ArPDF
 {
-    protected $content = '';
-    protected $objects = [];
-    protected $fonts = [];
+    protected Mpdf $mpdf;
 
-    public function __construct()
+    public function __construct(array $config = [])
     {
-        $this->content = "%PDF-1.7\n";
-        $this->addDefaultFonts();
+        // مسار مؤقت للملفات – داخل storage
+        $tempDir = storage_path('app/laravel-arpdf');
+
+        if (! is_dir($tempDir)) {
+            @mkdir($tempDir, 0775, true);
+        }
+
+        // إعدادات افتراضية مناسبة للعربية
+        $default = [
+            'mode'              => 'utf-8',
+            'format'            => 'A4',
+            'orientation'       => 'P',
+            'tempDir'           => $tempDir,
+            'margin_left'       => 10,
+            'margin_right'      => 10,
+            'margin_top'        => 10,
+            'margin_bottom'     => 10,
+            'margin_header'     => 5,
+            'margin_footer'     => 5,
+            'default_font_size' => 12,
+            'default_font'      => 'dejavusans',
+            'autoLangToFont'    => true,
+            'autoScriptToLang'  => true,
+            'directionality'    => 'rtl',
+        ];
+
+        $settings = array_merge($default, $config);
+
+        $this->mpdf = new Mpdf($settings);
+
+        // دعم إضافي للخطوط العربية (لو حابب تضيف خطوطك)
+        $this->bootstrapArabicFonts();
     }
 
-    public function addText($x, $y, $size, $text, $font = 'F1')
+    /**
+     * تهيئة الخطوط العربية الافتراضية (يمكن تطويرها لاحقًا)
+     */
+    protected function bootstrapArabicFonts(): void
     {
-        $this->objects[] = "BT /$font $size Tf $x $y Td ($text) Tj ET";
+        $defaultConfig = (new ConfigVariables())->getDefaults();
+        $fontDirs      = $defaultConfig['fontDir'];
+
+        $fontConfig = (new FontVariables())->getDefaults();
+        $fontData   = $fontConfig['fontdata'];
+
+        // بإمكانك إضافة مجلد خطوطك داخل الباكدج ونشره، هنا مثال عام
+        $this->mpdf->fontdata = $fontData + [
+            'cairo' => [
+                'R' => 'Cairo-Regular.ttf',
+                'B' => 'Cairo-Bold.ttf',
+            ],
+        ];
+
+        $this->mpdf->fontDir = array_merge($fontDirs, [
+            // ضع هنا مسار مجلد الخطوط لو حابب
+            // base_path('resources/fonts'),
+        ]);
+    }
+
+    /**
+     * تحميل HTML (مع CSS لو حابب)
+     */
+    public function loadHTML(string $html, int $mode = \Mpdf\HTMLParserMode::DEFAULT_MODE): self
+    {
+        $this->mpdf->WriteHTML($html, $mode);
+
         return $this;
     }
 
-    public function addHtml($html)
+    /**
+     * إضافة CSS منفصل
+     */
+    public function loadCSS(string $css): self
     {
-        $parser = new HtmlParser($html);
-        $elements = $parser->parse();
+        $this->mpdf->WriteHTML($css, \Mpdf\HTMLParserMode::HEADER_CSS);
 
-        foreach ($elements as $element) {
-            $css = new CssParser($element['style']);
-            $this->addText($element['x'], $element['y'], $element['size'], $element['text'], $css->getFont());
-        }
         return $this;
     }
 
-    protected function addDefaultFonts()
+    /**
+     * تغيير الاتجاه (rtl / ltr)
+     */
+    public function direction(string $dir = 'rtl'): self
     {
-        $fontManager = new FontManager();
-        $this->content .= $fontManager->getDefaultFontObjects();
+        $this->mpdf->SetDirectionality($dir);
+
+        return $this;
     }
 
-    public function renderContent()
+    /**
+     * حفظ الملف على القرص
+     */
+    public function save(string $path): self
     {
-        foreach ($this->objects as $object) {
-            $this->content .= "3 0 obj\n<< /Length 44 >>\nstream\n$object\nendstream\nendobj\n";
-        }
+        $this->mpdf->Output($path, \Mpdf\Output\Destination::FILE);
+
+        return $this;
     }
 
-    public function save($path)
+    /**
+     * إرجاع استجابة Laravel لعرض PDF في المتصفح (inline)
+     */
+    public function stream(string $filename = 'document.pdf')
     {
-        $this->renderContent();
-        $this->content .= "%%EOF";
-        file_put_contents($path, $this->content);
+        $content = $this->mpdf->Output($filename, \Mpdf\Output\Destination::STRING_RETURN);
+
+        return response($content, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+        ]);
     }
 
-    public function stream($filename = 'document.pdf')
+    /**
+     * إرجاع استجابة Laravel لتحميل الملف (download)
+     */
+    public function download(string $filename = 'document.pdf')
     {
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: inline; filename="' . $filename . '"');
-        echo $this->content;
+        $content = $this->mpdf->Output($filename, \Mpdf\Output\Destination::STRING_RETURN);
+
+        return response($content, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 }

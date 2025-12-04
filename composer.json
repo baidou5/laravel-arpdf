@@ -1,40 +1,32 @@
 {
-    "name": "baidouabdellah/laravel-arpdf",
-    "description": "A Laravel package for generating PDF files with Full support Arabic languages.",
-    "version": "1.0.2",
-    "type": "library",
-    "require": {
-        "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0"
-    },
-    "license": "MIT",
-    "autoload": {
-        "psr-4": {
-            "Baidouabdellah\\LaravelArpdf\\": "src/"
-        }
-    },
-    "authors": [
-        {
-            "name": "Abdellah Baidou",
-            "email": "baidou.abd@gmail.com"
-        }
-    ],
-    "require-dev": {
-        "phpunit/phpunit": "^11.3"
-    },
-    "minimum-stability": "dev",
-    "prefer-stable": true,
-    "keywords": [
-        "laravel",
-        "pdf",
-        "html",
-        "css",
-        "arabic",
-        "fonts",
-        "package"
-    ],
-    "homepage": "https://github.com/baidou5/laravel-arpdf",
-    "support": {
-        "issues": "https://github.com/baidou5/laravel-arpdf/issues",
-        "source": "https://github.com/baidou5/laravel-arpdf"
-    }
+  "name": "baidouabdellah/laravel-arpdf",
+  "description": "Generate Arabic-friendly PDFs in Laravel (wrapper around mPDF)",
+  "type": "library",
+  "license": "MIT",
+
+  "require": {
+      "php": "^8.0",
+      "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0",
+      "mpdf/mpdf": "^8.2"
+  },
+
+  "autoload": {
+      "psr-4": {
+          "Baidouabdellah\\LaravelArpdf\\": "src/"
+      }
+  },
+
+  "extra": {
+      "laravel": {
+          "providers": [
+              "Baidouabdellah\\LaravelArpdf\\ArPDFServiceProvider"
+          ],
+          "aliases": {
+              "ArPDF": "Baidouabdellah\\LaravelArpdf\\Facades\\ArPDF"
+          }
+      }
+  },
+
+  "minimum-stability": "stable",
+  "prefer-stable": true
 }
