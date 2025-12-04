@@ -12,14 +12,12 @@ class ArPDF
 
     public function __construct(array $config = [])
     {
-        // مسار مؤقت للملفات – داخل storage
         $tempDir = storage_path('app/laravel-arpdf');
-
+    
         if (! is_dir($tempDir)) {
             @mkdir($tempDir, 0775, true);
         }
-
-        // إعدادات افتراضية مناسبة للعربية
+    
         $default = [
             'mode'              => 'utf-8',
             'format'            => 'A4',
@@ -37,39 +35,14 @@ class ArPDF
             'autoScriptToLang'  => true,
             'directionality'    => 'rtl',
         ];
-
+    
         $settings = array_merge($default, $config);
-
+    
         $this->mpdf = new Mpdf($settings);
-
-        // دعم إضافي للخطوط العربية (لو حابب تضيف خطوطك)
-        $this->bootstrapArabicFonts();
     }
+    
 
-    /**
-     * تهيئة الخطوط العربية الافتراضية (يمكن تطويرها لاحقًا)
-     */
-    protected function bootstrapArabicFonts(): void
-    {
-        $defaultConfig = (new ConfigVariables())->getDefaults();
-        $fontDirs      = $defaultConfig['fontDir'];
-
-        $fontConfig = (new FontVariables())->getDefaults();
-        $fontData   = $fontConfig['fontdata'];
-
-        // بإمكانك إضافة مجلد خطوطك داخل الباكدج ونشره، هنا مثال عام
-        $this->mpdf->fontdata = $fontData + [
-            'cairo' => [
-                'R' => 'Cairo-Regular.ttf',
-                'B' => 'Cairo-Bold.ttf',
-            ],
-        ];
-
-        $this->mpdf->fontDir = array_merge($fontDirs, [
-            // ضع هنا مسار مجلد الخطوط لو حابب
-            // base_path('resources/fonts'),
-        ]);
-    }
+     
 
     /**
      * تحميل HTML (مع CSS لو حابب)
