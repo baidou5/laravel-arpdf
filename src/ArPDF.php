@@ -15,30 +15,32 @@ class ArPDF
     /**
      * ArPDF constructor.
      *
-     * يمكنك تمرير إعدادات إضافية من عندك عبر $overrideConfig
+     * You can pass your own override settings through $overrideConfig
      */
     public function __construct(array $overrideConfig = [])
     {
-        // نقرأ من config (لو مش منشورة يرجع للقيم الافتراضية)
+        // Read values from config (fallback to default values if not published)
         $direction       = $overrideConfig['directionality'] ?? config('arpdf.direction', 'rtl');
         $defaultFont     = $overrideConfig['default_font']    ?? config('arpdf.default_font', 'cairo');
         $tempDir         = $overrideConfig['tempDir']         ?? config('arpdf.temp_dir', storage_path('app/laravel-arpdf'));
         $publishedFonts  = $overrideConfig['fonts_path']      ?? config('arpdf.fonts_path', resource_path('fonts/arpdf'));
 
+        // Ensure temp directory exists
         if (! is_dir($tempDir)) {
             @mkdir($tempDir, 0775, true);
         }
 
-        // إعدادات mPDF الافتراضية
+        // Default mPDF configuration
         $defaultConfig = (new ConfigVariables())->getDefaults();
         $fontDirs      = $defaultConfig['fontDir'];
 
         $fontConfig = (new FontVariables())->getDefaults();
         $fontData   = $fontConfig['fontdata'];
 
-        // الخطوط الإضافية من config/arpdf.php
+        // Extra fonts loaded from config/arpdf.php
         $extraFonts = config('arpdf.fonts', []);
 
+        // Final mPDF configuration (merged with overrides)
         $mpdfConfig = array_merge([
             'mode'              => 'utf-8',
             'format'            => 'A4',
@@ -51,26 +53,30 @@ class ArPDF
             'margin_header'     => 5,
             'margin_footer'     => 5,
             'default_font_size' => 12,
-            'autoLangToFont'    => true,
-            'autoScriptToLang'  => true,
+
+            // Disable auto font detection to force using cairo font
+            'autoLangToFont'    => false,
+            'autoScriptToLang'  => false,
+
             'directionality'    => $direction,
 
-            // أهم حاجة: نضيف مجلد الخطوط ونعرّف fontdata
+            // Merge default fonts directory with published fonts
             'fontDir'           => array_merge($fontDirs, [$publishedFonts]),
             'fontdata'          => $fontData + $extraFonts,
             'default_font'      => $defaultFont,
         ], $overrideConfig);
 
+        // Initialize mPDF
         $this->mpdf = new Mpdf($mpdfConfig);
 
-        // نضمن استعمال الخط الافتراضي
+        // Ensure default font is applied
         if ($defaultFont) {
             $this->mpdf->SetFont($defaultFont);
         }
     }
 
     /**
-     * تحميل HTML (سلسلي)
+     * Load raw HTML content
      */
     public function loadHTML(string $html, int $mode = HTMLParserMode::DEFAULT_MODE): self
     {
@@ -79,7 +85,7 @@ class ArPDF
     }
 
     /**
-     * تحميل View Blade مباشرة
+     * Load Blade view directly
      */
     public function loadView(string $view, array $data = [], int $mode = HTMLParserMode::DEFAULT_MODE): self
     {
@@ -88,7 +94,7 @@ class ArPDF
     }
 
     /**
-     * تحميل CSS منفصل
+     * Load CSS separately
      */
     public function loadCSS(string $css): self
     {
@@ -97,7 +103,7 @@ class ArPDF
     }
 
     /**
-     * تغيير اتجاه الصفحة (RTL أو LTR)
+     * Change document direction (RTL or LTR)
      */
     public function direction(string $dir = 'rtl'): self
     {
@@ -106,7 +112,7 @@ class ArPDF
     }
 
     /**
-     * حفظ الملف على السيرفر
+     * Save PDF file on the server
      */
     public function save(string $path): self
     {
@@ -115,7 +121,7 @@ class ArPDF
     }
 
     /**
-     * عرض PDF داخل المتصفح (inline)
+     * Stream PDF inline in browser
      */
     public function stream(string $filename = 'document.pdf')
     {
@@ -128,7 +134,7 @@ class ArPDF
     }
 
     /**
-     * تحميل PDF (download)
+     * Force PDF download
      */
     public function download(string $filename = 'document.pdf')
     {
@@ -141,7 +147,7 @@ class ArPDF
     }
 
     /**
-     * واجهة مباشرة لـ mPDF::Output (للي يحب يستخدمها)
+     * Direct interface for mPDF::Output (for advanced users)
      */
     public function output(string $filename = 'document.pdf', string $dest = Destination::INLINE)
     {
@@ -149,7 +155,7 @@ class ArPDF
     }
 
     /**
-     * للتوافق مع الكود القديم اللي يستعمل render()
+     * Compatibility with older code using render()
      */
     public function render(string $html, string $fileName = 'document.pdf', string $dest = 'I')
     {
@@ -158,7 +164,7 @@ class ArPDF
     }
 
     /**
-     * ترجيع كائن mPDF لو حبيت تتعامل معه مباشرة
+     * Return the internal mPDF instance for direct manipulation
      */
     public function getMpdf(): Mpdf
     {
