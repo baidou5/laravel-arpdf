@@ -8,15 +8,15 @@ class ArPDFServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // دمج ملف الإعدادات
+        // Merge the package configuration file with the application's config
         $this->mergeConfigFrom(
             __DIR__ . '/../config/arpdf.php',
             'arpdf'
         );
 
-        // تسجيل الـ ArPDF في الـ container
+        // Register ArPDF as a singleton inside the service container
         $this->app->singleton(ArPDF::class, function ($app) {
-            // نمرر إعدادات من config إلى الكلاس
+            // Load settings from config to pass into the class
             $config = [
                 'directionality' => config('arpdf.direction', 'rtl'),
                 'default_font'   => config('arpdf.default_font', 'cairo'),
@@ -26,22 +26,23 @@ class ArPDFServiceProvider extends ServiceProvider
             return new ArPDF($config);
         });
 
+        // Register alias for easier static access via Facade
         $this->app->alias(ArPDF::class, 'ArPDF');
     }
 
     public function boot(): void
     {
-        // نشر ملف الإعدادات
+        // Publish configuration file
         $this->publishes([
             __DIR__ . '/../config/arpdf.php' => config_path('arpdf.php'),
         ], 'arpdf-config');
 
-        // نشر الخطوط
+        // Publish fonts directory
         $this->publishes([
             __DIR__ . '/../resources/fonts' => resource_path('fonts/arpdf'),
         ], 'arpdf-fonts');
 
-        // نشر الكل معًا
+        // Publish everything together (config + fonts)
         $this->publishes([
             __DIR__ . '/../config/arpdf.php' => config_path('arpdf.php'),
             __DIR__ . '/../resources/fonts'  => resource_path('fonts/arpdf'),
