@@ -39,7 +39,7 @@ Add the service provider to `config/app.php`:
 ],
 ```
 
-### (Optional) Publish Configuration
+### Publish Configuration
 
 ```bash
 php artisan vendor:publish --provider="Baidouabdellah\LaravelArpdf\ArPDFServiceProvider"
@@ -57,15 +57,13 @@ This allows customizing fonts, default direction (RTL/LTR), and mPDF settings.
 use Baidouabdellah\LaravelArpdf\Facades\ArPDF;
 
 
-public function testPdf()
-{
-    $html = '<h1 style="text-align:right">مرحبا بالعالم</h1>
-             <p>هذا مثال PDF باستخدام Laravel ArPDF.</p>';
-
-    return ArPDF::direction('rtl')
-        ->loadHTML($html)
-        ->download('example.pdf'); //stream or download
-}
+  public function generatePdf()
+    {
+        return ArPDF::loadView('arpdf-test', [
+            'title'   => 'اللغة الرعبية هي العنوان',
+            'message' => 'نمودجي لنص عربي من اليمين الى اليسار',
+        ])->stream('view-test.pdf');
+    }
 ```
 
 ---
