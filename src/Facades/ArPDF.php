@@ -8,7 +8,7 @@ class ArPDF extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        // لازم يكون نفس الـ alias المسجَّل في service provider
+        // Must match the alias registered in the service provider
         return 'ArPDF';
     }
 }
