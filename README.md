@@ -2,18 +2,29 @@
 
 # Laravel ArPDF
 
-A Laravel package for generating Arabic-friendly PDF files with UTF-8 + RTL support.
+Generate professional Arabic PDFs in Laravel with reliable **RTL**, **UTF-8**, and Arabic font support.
 
-This version is **driver-based** and does **not depend on mPDF**. The default engine is **Dompdf**.
+`laravel-arpdf` helps teams ship invoices, reports, contracts, and official documents without text corruption, broken alignment, or rendering surprises.
 
-## Features
+## Why ArPDF?
 
-- Arabic + RTL + UTF-8 support
-- Laravel-friendly fluent API
-- Driver-based architecture for large projects
-- Per-resolution binding (safer for Octane/workers)
-- Custom fonts via config (`R`/`B` map)
-- Stream, download, save, or return raw PDF bytes
+Arabic PDF generation is usually where production issues appear first:
+
+- Arabic letters disconnected or reversed
+- Mixed Arabic/English content breaks layout
+- Fonts differ between environments
+- Output is inconsistent across controllers and queues
+
+ArPDF solves this by giving you a clean Laravel API and stable defaults focused on Arabic-first documents.
+
+## Key Features
+
+- Full Arabic + RTL + UTF-8 support
+- Fluent Laravel API
+- Clean architecture with configurable rendering engine (default: Dompdf)
+- Works well in web requests, jobs, and worker environments
+- Custom font mapping from configuration
+- Multiple output targets: stream, download, save, raw string
 
 ## Installation
 
@@ -21,13 +32,13 @@ This version is **driver-based** and does **not depend on mPDF**. The default en
 composer require baidouabdellah/laravel-arpdf
 ```
 
-Publish config/fonts (optional):
+Publish configuration and fonts (optional):
 
 ```bash
 php artisan vendor:publish --provider="Baidouabdellah\LaravelArpdf\ArPDFServiceProvider"
 ```
 
-## Quick Usage
+## Quick Example
 
 ```php
 use ArPDF;
@@ -42,14 +53,14 @@ public function invoice()
 
 ## Output Destinations
 
-`output($filename, $dest)` supports both legacy and named destinations:
+`output($filename, $dest)` supports:
 
 - Legacy: `I`, `D`, `F`, `S`
 - Named: `inline`, `download`, `file`, `string`
 
 ## Configuration
 
-`config/arpdf.php` includes:
+Main options in `config/arpdf.php`:
 
 - `direction`, `default_font`
 - `temp_dir`, `fonts_path`, `fonts`
@@ -62,14 +73,6 @@ public function invoice()
 ```bash
 vendor/bin/phpunit -c tests/phpunit.xml
 ```
-
-## Upgrade Notes
-
-For migration from old mPDF-based versions, see `UPGRADE.md`.
-
-## Extending with Your Own Engine
-
-Implement `Baidouabdellah\LaravelArpdf\Contracts\PdfEngine` and bind it in your app container.
 
 ## License
 

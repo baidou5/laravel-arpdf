@@ -53,9 +53,20 @@ class DompdfEngine implements PdfEngine
             $options->setTempDir($config['temp_dir']);
         }
 
-        if (! empty($config['fonts_path'])) {
-            $options->setFontDir($config['fonts_path']);
-            $options->setFontCache($config['fonts_path']);
+        if (! empty($config['fonts_path']) && is_dir((string) $config['fonts_path'])) {
+            $options->setFontDir((string) $config['fonts_path']);
+        }
+
+        $fontCache = (string) ($config['font_cache'] ?? '');
+        if ($fontCache === '' && ! empty($config['temp_dir'])) {
+            $fontCache = rtrim((string) $config['temp_dir'], '/\\') . '/font-cache';
+        }
+        if ($fontCache !== '') {
+            if (! is_dir($fontCache)) {
+                mkdir($fontCache, 0775, true);
+            }
+
+            $options->setFontCache($fontCache);
         }
 
         if (! isset($dompdfOptions['isRemoteEnabled'])) {

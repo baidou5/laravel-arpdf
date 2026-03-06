@@ -313,7 +313,111 @@ class ArPDF
             $frameworkConfig['temp_dir'] = $this->safeStoragePath('app/laravel-arpdf');
         }
 
-        return array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);
+        $config = array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);
+
+        return $this->normalizeFontConfig($config);
+    }
+
+    protected function normalizeFontConfig(array $config): array
+    {
+        $fontsPath = (string) ($config['fonts_path'] ?? '');
+        $fonts = (array) ($config['fonts'] ?? []);
+
+        if (! $this->hasUsableMappedFont($fontsPath, $fonts)) {
+            $packageFontsPath = $this->packageFontsPath();
+            if ($packageFontsPath !== null) {
+                $config['fonts_path'] = $packageFontsPath;
+
+                if (! isset($fonts['cairo'])) {
+                    $fonts['cairo'] = [
+                        'R' => 'Cairo-Regular.ttf',
+                        'B' => 'Cairo-Bold.ttf',
+                    ];
+                }
+
+                $config['fonts'] = $fonts;
+            }
+        }
+
+        if (! $this->isDefaultFontAvailable($config)) {
+            $config['default_font'] = 'DejaVu Sans';
+        }
+
+        return $config;
+    }
+
+    protected function hasUsableMappedFont(string $fontsPath, array $fonts): bool
+    {
+        if ($fontsPath === '' || ! is_dir($fontsPath)) {
+            return false;
+        }
+
+        foreach ($fonts as $font) {
+            if (! is_array($font)) {
+                continue;
+            }
+
+            $regular = $font['R'] ?? null;
+            if (! is_string($regular)) {
+                continue;
+            }
+
+            $candidate = rtrim($fontsPath, '/\\') . '/' . ltrim($regular, '/\\');
+            if (is_file($candidate)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function isDefaultFontAvailable(array $config): bool
+    {
+        $defaultFont = trim((string) ($config['default_font'] ?? ''));
+        if ($defaultFont === '') {
+            return false;
+        }
+
+        $builtinFonts = [
+            'serif',
+            'sans-serif',
+            'monospace',
+            'cursive',
+            'fantasy',
+            'helvetica',
+            'times-roman',
+            'courier',
+            'dejavu sans',
+            'dejavu serif',
+            'dejavu sans mono',
+        ];
+
+        if (in_array(strtolower($defaultFont), $builtinFonts, true)) {
+            return true;
+        }
+
+        $fontsPath = (string) ($config['fonts_path'] ?? '');
+        $fonts = (array) ($config['fonts'] ?? []);
+        $fontConfig = $fonts[$defaultFont] ?? $fonts[strtolower($defaultFont)] ?? null;
+        if (! is_array($fontConfig)) {
+            return false;
+        }
+
+        $regular = $fontConfig['R'] ?? null;
+        if (! is_string($regular) || $fontsPath === '') {
+            return false;
+        }
+
+        $candidate = rtrim($fontsPath, '/\\') . '/' . ltrim($regular, '/\\');
+
+        return is_file($candidate);
+    }
+
+    protected function packageFontsPath(): ?string
+    {
+        $path = dirname(__DIR__) . '/resources/fonts';
+
+        return is_dir($path) ? $path : null;
     }
 
     protected function hasConfigBinding(): bool
