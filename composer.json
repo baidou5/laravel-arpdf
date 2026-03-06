@@ -6,7 +6,6 @@
   "require": {
     "php": "^8.0",
     "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0 || ^12.0",
-    "dompdf/dompdf": "^2.0 || ^3.0",
     "mpdf/mpdf": "^8.2"
   },
   "require-dev": {

@@ -3,7 +3,6 @@
 namespace Baidouabdellah\LaravelArpdf;
 
 use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
-use Baidouabdellah\LaravelArpdf\Engines\DompdfEngine;
 use Baidouabdellah\LaravelArpdf\Engines\MpdfEngine;
 use InvalidArgumentException;
 use RuntimeException;
@@ -22,13 +21,21 @@ class ArPDF
 
     protected string $direction;
 
+    protected array $runtimeOptions = [];
+
     protected ?string $cachedPdf = null;
 
     public function __construct(?PdfEngine $engine = null, array $overrideConfig = [])
     {
         $this->config = $this->resolveConfig($overrideConfig);
         $this->direction = strtolower((string) ($this->config['direction'] ?? 'rtl'));
-        $this->engine = $engine ?? $this->resolveDefaultEngine();
+        $this->engine = $engine ?? new MpdfEngine($this->config);
+        $this->runtimeOptions = [
+            'paper' => $this->config['paper'],
+            'orientation' => $this->config['orientation'],
+            'margins' => $this->config['margins'],
+            'metadata' => $this->config['metadata'],
+        ];
 
         $tempDir = (string) ($this->config['temp_dir'] ?? '');
         if ($tempDir !== '' && ! is_dir($tempDir)) {
@@ -80,6 +87,135 @@ class ArPDF
         return $this;
     }
 
+    public function paper(string $format = 'A4', string $orientation = 'portrait'): self
+    {
+        $orientation = strtolower($orientation);
+        if (! in_array($orientation, ['portrait', 'landscape', 'p', 'l'], true)) {
+            throw new InvalidArgumentException('Orientation must be portrait/landscape.');
+        }
+
+        $this->runtimeOptions['paper'] = strtoupper($format);
+        $this->runtimeOptions['orientation'] = in_array($orientation, ['landscape', 'l'], true)
+            ? 'landscape'
+            : 'portrait';
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function margins(
+        int|float $left,
+        int|float $right,
+        int|float $top,
+        int|float $bottom,
+        int|float $header = 5,
+        int|float $footer = 5
+    ): self {
+        $this->runtimeOptions['margins'] = [
+            'left' => $left,
+            'right' => $right,
+            'top' => $top,
+            'bottom' => $bottom,
+            'header' => $header,
+            'footer' => $footer,
+        ];
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function header(string $html): self
+    {
+        $this->runtimeOptions['header_html'] = $html;
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function footer(string $html): self
+    {
+        $this->runtimeOptions['footer_html'] = $html;
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function watermarkText(string $text, float $alpha = 0.08): self
+    {
+        $this->runtimeOptions['watermark_text'] = $text;
+        $this->runtimeOptions['watermark_text_alpha'] = $alpha;
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function watermarkImage(string $path, float $alpha = 0.2): self
+    {
+        $this->runtimeOptions['watermark_image'] = $path;
+        $this->runtimeOptions['watermark_image_alpha'] = $alpha;
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function metadata(array $metadata): self
+    {
+        $existing = (array) ($this->runtimeOptions['metadata'] ?? []);
+        $this->runtimeOptions['metadata'] = array_merge($existing, $metadata);
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function title(string $title): self
+    {
+        return $this->metadata(['title' => $title]);
+    }
+
+    public function author(string $author): self
+    {
+        return $this->metadata(['author' => $author]);
+    }
+
+    public function subject(string $subject): self
+    {
+        return $this->metadata(['subject' => $subject]);
+    }
+
+    public function keywords(string $keywords): self
+    {
+        return $this->metadata(['keywords' => $keywords]);
+    }
+
+    public function creator(string $creator): self
+    {
+        return $this->metadata(['creator' => $creator]);
+    }
+
+    public function option(string $key, mixed $value): self
+    {
+        $this->runtimeOptions[$key] = $value;
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function options(array $options): self
+    {
+        $this->runtimeOptions = array_replace_recursive($this->runtimeOptions, $options);
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function pageBreak(): self
+    {
+        $this->htmlParts[] = '<pagebreak />';
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
     public function save(string $path): self
     {
         $this->ensureParentDirectoryExists($path);
@@ -90,16 +226,12 @@ class ArPDF
 
     public function stream(string $filename = 'document.pdf')
     {
-        $content = $this->renderBinary();
-
-        return $this->makeBinaryResponse($content, $filename, false);
+        return $this->makeBinaryResponse($this->renderBinary(), $filename, false);
     }
 
     public function download(string $filename = 'document.pdf')
     {
-        $content = $this->renderBinary();
-
-        return $this->makeBinaryResponse($content, $filename, true);
+        return $this->makeBinaryResponse($this->renderBinary(), $filename, true);
     }
 
     public function output(string $filename = 'document.pdf', string $dest = ArPdfDestination::INLINE)
@@ -133,11 +265,17 @@ class ArPDF
         return $this->output($fileName, $dest);
     }
 
-    public function getMpdf()
+    public function getMpdf(): ?\Mpdf\Mpdf
     {
-        throw new RuntimeException(
-            'getMpdf() is no longer available because this package no longer depends on mPDF.'
-        );
+        if ($this->engine instanceof MpdfEngine) {
+            if ($this->cachedPdf === null) {
+                $this->renderBinary();
+            }
+
+            return $this->engine->getLastInstance();
+        }
+
+        return null;
     }
 
     public function getEngine(): PdfEngine
@@ -145,10 +283,25 @@ class ArPDF
         return $this->engine;
     }
 
+    public function useEngine(PdfEngine $engine): self
+    {
+        $this->engine = $engine;
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
     public function reset(): self
     {
         $this->htmlParts = [];
         $this->cssParts = [];
+        $this->runtimeOptions = [
+            'paper' => $this->config['paper'],
+            'orientation' => $this->config['orientation'],
+            'margins' => $this->config['margins'],
+            'metadata' => $this->config['metadata'],
+        ];
+        $this->direction = strtolower((string) ($this->config['direction'] ?? 'rtl'));
         $this->cachedPdf = null;
 
         return $this;
@@ -160,29 +313,28 @@ class ArPDF
             return $this->cachedPdf;
         }
 
-        $html = $this->buildHtmlDocument();
-        $this->cachedPdf = $this->engine->render($html, $this->config);
+        $options = $this->buildRenderOptions();
+        $content = implode("\n", $this->htmlParts);
+        $this->cachedPdf = $this->engine->render($content, $options);
 
         return $this->cachedPdf;
     }
 
-    protected function buildHtmlDocument(): string
+    protected function buildRenderOptions(): array
     {
-        $bootstrapCss = $this->buildBootstrapCss();
-        $customCss = implode("\n", $this->cssParts);
-        $content = implode("\n", $this->htmlParts);
+        $css = trim($this->buildBootstrapCss() . "\n" . implode("\n", $this->cssParts));
 
-        return '<!doctype html><html lang="ar" dir="' . $this->direction . '"><head><meta charset="UTF-8">'
-            . '<style>' . $bootstrapCss . "\n" . $customCss . '</style></head><body>'
-            . $content
-            . '</body></html>';
+        return array_replace_recursive($this->config, $this->runtimeOptions, [
+            'direction' => $this->direction,
+            'css' => $css,
+        ]);
     }
 
     protected function buildBootstrapCss(): string
     {
         $css = [];
         $defaultFont = (string) ($this->config['default_font'] ?? 'sans-serif');
-        $fontPath = rtrim((string) ($this->config['fonts_path'] ?? ''), '/');
+        $fontPath = rtrim((string) ($this->config['fonts_path'] ?? ''), '/\\');
         $fontMap = (array) ($this->config['fonts'] ?? []);
 
         foreach ($fontMap as $fontName => $fontFiles) {
@@ -194,7 +346,7 @@ class ArPDF
             $boldFile = $fontFiles['B'] ?? null;
 
             if (is_string($regularFile) && $fontPath !== '') {
-                $fullPath = $fontPath . '/' . ltrim($regularFile, '/');
+                $fullPath = $fontPath . '/' . ltrim($regularFile, '/\\');
                 if (is_file($fullPath)) {
                     $css[] = "@font-face{font-family:'{$fontName}';font-style:normal;font-weight:400;src:url('"
                         . $this->toCssFileUrl($fullPath)
@@ -203,7 +355,7 @@ class ArPDF
             }
 
             if (is_string($boldFile) && $fontPath !== '') {
-                $fullPath = $fontPath . '/' . ltrim($boldFile, '/');
+                $fullPath = $fontPath . '/' . ltrim($boldFile, '/\\');
                 if (is_file($fullPath)) {
                     $css[] = "@font-face{font-family:'{$fontName}';font-style:normal;font-weight:700;src:url('"
                         . $this->toCssFileUrl($fullPath)
@@ -212,7 +364,8 @@ class ArPDF
             }
         }
 
-        $css[] = "html,body{direction:{$this->direction};font-family:'{$defaultFont}',sans-serif;}";
+        $align = $this->direction === 'rtl' ? 'right' : 'left';
+        $css[] = "html,body{direction:{$this->direction};text-align:{$align};font-family:'{$defaultFont}','DejaVu Sans',sans-serif;}";
 
         return implode("\n", $css);
     }
@@ -286,19 +439,28 @@ class ArPDF
     protected function resolveConfig(array $overrideConfig): array
     {
         $defaultConfig = [
-            'engine' => 'mpdf',
             'direction' => 'rtl',
             'default_font' => 'cairo',
             'temp_dir' => sys_get_temp_dir() . '/laravel-arpdf',
             'fonts_path' => '',
             'fonts' => [],
-            'paper' => 'a4',
+            'paper' => 'A4',
             'orientation' => 'portrait',
-            'enable_remote_assets' => false,
-            'dompdf_options' => [
-                'isHtml5ParserEnabled' => true,
-                'isFontSubsettingEnabled' => true,
-                'defaultPaperSize' => 'a4',
+            'margins' => [
+                'left' => 10,
+                'right' => 10,
+                'top' => 10,
+                'bottom' => 10,
+                'header' => 5,
+                'footer' => 5,
+            ],
+            'metadata' => [
+                'creator' => 'laravel-arpdf',
+            ],
+            'mpdf' => [
+                'mode' => 'utf-8',
+                'autoLangToFont' => true,
+                'autoScriptToLang' => true,
             ],
         ];
 
@@ -318,21 +480,6 @@ class ArPDF
         $config = array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);
 
         return $this->normalizeFontConfig($config);
-    }
-
-    protected function resolveDefaultEngine(): PdfEngine
-    {
-        $preferred = strtolower((string) ($this->config['engine'] ?? 'mpdf'));
-
-        if ($preferred === 'dompdf') {
-            return new DompdfEngine($this->config);
-        }
-
-        if (class_exists(\Mpdf\Mpdf::class)) {
-            return new MpdfEngine($this->config);
-        }
-
-        return new DompdfEngine($this->config);
     }
 
     protected function normalizeFontConfig(array $config): array
@@ -357,7 +504,7 @@ class ArPDF
         }
 
         if (! $this->isDefaultFontAvailable($config)) {
-            $config['default_font'] = 'DejaVu Sans';
+            $config['default_font'] = 'dejavusans';
         }
 
         return $config;
@@ -395,39 +542,35 @@ class ArPDF
             return false;
         }
 
-        $builtinFonts = [
-            'serif',
-            'sans-serif',
-            'monospace',
-            'cursive',
-            'fantasy',
-            'helvetica',
-            'times-roman',
-            'courier',
-            'dejavu sans',
-            'dejavu serif',
-            'dejavu sans mono',
-        ];
+        $fontsPath = (string) ($config['fonts_path'] ?? '');
+        $fonts = (array) ($config['fonts'] ?? []);
 
-        if (in_array(strtolower($defaultFont), $builtinFonts, true)) {
+        $builtinFonts = ['dejavusans', 'dejavuserif', 'dejavusansmono'];
+        $normalized = strtolower(str_replace([' ', '-'], '', $defaultFont));
+
+        if (in_array($normalized, $builtinFonts, true)) {
             return true;
         }
 
-        $fontsPath = (string) ($config['fonts_path'] ?? '');
-        $fonts = (array) ($config['fonts'] ?? []);
-        $fontConfig = $fonts[$defaultFont] ?? $fonts[strtolower($defaultFont)] ?? null;
-        if (! is_array($fontConfig)) {
-            return false;
+        foreach ($fonts as $fontName => $fontConfig) {
+            if (! is_array($fontConfig)) {
+                continue;
+            }
+
+            $key = strtolower(str_replace([' ', '-'], '', (string) $fontName));
+            if ($key !== $normalized) {
+                continue;
+            }
+
+            $regular = $fontConfig['R'] ?? null;
+            if (! is_string($regular) || $fontsPath === '') {
+                return false;
+            }
+
+            return is_file(rtrim($fontsPath, '/\\') . '/' . ltrim($regular, '/\\'));
         }
 
-        $regular = $fontConfig['R'] ?? null;
-        if (! is_string($regular) || $fontsPath === '') {
-            return false;
-        }
-
-        $candidate = rtrim($fontsPath, '/\\') . '/' . ltrim($regular, '/\\');
-
-        return is_file($candidate);
+        return false;
     }
 
     protected function packageFontsPath(): ?string
