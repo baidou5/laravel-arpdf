@@ -128,6 +128,12 @@ $pdf->usePluginNamed('certificate_signature', [
     'sidecar_path' => storage_path('app/signatures/invoice.sig.json'),
 ]);
 
+$check = \Baidouabdellah\LaravelArpdf\ArPDF::verifySignature(
+    storage_path('app/invoices/invoice.pdf'),
+    storage_path('app/signatures/invoice.sig.json'),
+    storage_path('keys/cert.pem')
+);
+
 $result = $pdf->assertSnapshot('doc-v1'); // stores/compares sha256 snapshot
 if (! $result['matched']) {
     // regression detected

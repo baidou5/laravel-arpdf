@@ -289,6 +289,7 @@ class ArPDFUnitTest extends TestCase
         $keyFile = $tmp . '/private.pem';
         $certFile = $tmp . '/cert.pem';
         $sigFile = $tmp . '/doc.sig.json';
+        $pdfFile = $tmp . '/doc.pdf';
 
         $pkey = openssl_pkey_new([
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
@@ -308,18 +309,24 @@ class ArPDFUnitTest extends TestCase
         $this->assertTrue(openssl_x509_export($cert, $certPem));
         file_put_contents($certFile, $certPem);
 
-        $pdf->usePluginNamed('certificate_signature', [
+        $output = $pdf->usePluginNamed('certificate_signature', [
             'private_key' => $keyFile,
             'certificate' => $certFile,
             'sidecar_path' => $sigFile,
         ])->loadHTML('<h1>Signed</h1>')
             ->output('doc.pdf', 'S');
+        file_put_contents($pdfFile, (string) $output);
 
         $this->assertFileExists($sigFile);
         $payload = json_decode((string) file_get_contents($sigFile), true);
         $this->assertIsArray($payload);
         $this->assertNotEmpty($payload['signature_base64'] ?? '');
         $this->assertNotEmpty($payload['pdf_sha256'] ?? '');
+
+        $verification = ArPDF::verifySignature($pdfFile, $sigFile, $certFile);
+        $this->assertTrue((bool) ($verification['valid'] ?? false));
+        $this->assertTrue((bool) ($verification['hash_matches'] ?? false));
+        $this->assertTrue((bool) ($verification['signature_verified'] ?? false));
     }
 }
 

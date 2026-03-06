@@ -14,6 +14,7 @@ use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\WatermarkTextPlugin;
 use Baidouabdellah\LaravelArpdf\Plugins\PluginManager;
 use Baidouabdellah\LaravelArpdf\Plugins\PluginRegistry;
 use Baidouabdellah\LaravelArpdf\Reports\ReportBuilder;
+use Baidouabdellah\LaravelArpdf\Security\SignatureVerifier;
 use Baidouabdellah\LaravelArpdf\Templates\TemplateEngine;
 use Baidouabdellah\LaravelArpdf\Testing\PdfSnapshotManager;
 use InvalidArgumentException;
@@ -498,6 +499,17 @@ class ArPDF
         }
 
         return $manager->assertSnapshot($name, $bytes, $directory, $update);
+    }
+
+    public static function verifySignature(
+        string $pdfPath,
+        string $sidecarPath,
+        ?string $certificatePath = null,
+        ?string $publicKeyPath = null
+    ): array {
+        $verifier = new SignatureVerifier();
+
+        return $verifier->verifyFiles($pdfPath, $sidecarPath, $certificatePath, $publicKeyPath);
     }
 
     public function reset(): self
