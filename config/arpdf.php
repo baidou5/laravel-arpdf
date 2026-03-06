@@ -163,5 +163,6 @@ return [
         'watermark_text',
         'signature_block',
         'quick_qr',
+        'certificate_signature',
     ],
 ];

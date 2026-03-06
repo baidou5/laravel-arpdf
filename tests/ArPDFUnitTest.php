@@ -271,7 +271,55 @@ class ArPDFUnitTest extends TestCase
             ->output('doc.pdf', 'S');
 
         $this->assertStringContainsString('Admin', $engine->lastHtml);
-        $this->assertStringContainsString('quickchart.io/qr', $engine->lastHtml);
+        $this->assertStringContainsString('<svg', $engine->lastHtml);
+        $this->assertStringNotContainsString('quickchart.io/qr', $engine->lastHtml);
+    }
+
+    public function testCertificateSignaturePluginCreatesSidecar(): void
+    {
+        if (! extension_loaded('openssl')) {
+            $this->markTestSkipped('OpenSSL extension is required for this test.');
+        }
+
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+
+        $tmp = sys_get_temp_dir() . '/laravel-arpdf-cert-' . uniqid('', true);
+        mkdir($tmp, 0775, true);
+        $keyFile = $tmp . '/private.pem';
+        $certFile = $tmp . '/cert.pem';
+        $sigFile = $tmp . '/doc.sig.json';
+
+        $pkey = openssl_pkey_new([
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'private_key_bits' => 2048,
+        ]);
+        $this->assertNotFalse($pkey);
+
+        $privatePem = '';
+        $this->assertTrue(openssl_pkey_export($pkey, $privatePem));
+        file_put_contents($keyFile, $privatePem);
+
+        $csr = openssl_csr_new(['commonName' => 'ArPDF Test'], $pkey);
+        $this->assertNotFalse($csr);
+        $cert = openssl_csr_sign($csr, null, $pkey, 1);
+        $this->assertNotFalse($cert);
+        $certPem = '';
+        $this->assertTrue(openssl_x509_export($cert, $certPem));
+        file_put_contents($certFile, $certPem);
+
+        $pdf->usePluginNamed('certificate_signature', [
+            'private_key' => $keyFile,
+            'certificate' => $certFile,
+            'sidecar_path' => $sigFile,
+        ])->loadHTML('<h1>Signed</h1>')
+            ->output('doc.pdf', 'S');
+
+        $this->assertFileExists($sigFile);
+        $payload = json_decode((string) file_get_contents($sigFile), true);
+        $this->assertIsArray($payload);
+        $this->assertNotEmpty($payload['signature_base64'] ?? '');
+        $this->assertNotEmpty($payload['pdf_sha256'] ?? '');
     }
 }
 

@@ -59,6 +59,11 @@ class ComposerStaticInite813bfabda47c05e4bed3a88308d7eba
         array (
             'setasign\\Fpdi\\' => 14,
         ),
+        'c' => 
+        array (
+            'chillerlan\\Settings\\' => 20,
+            'chillerlan\\QRCode\\' => 18,
+        ),
         'W' => 
         array (
             'Whoops\\' => 7,
@@ -206,6 +211,14 @@ class ComposerStaticInite813bfabda47c05e4bed3a88308d7eba
         'setasign\\Fpdi\\' => 
         array (
             0 => __DIR__ . '/..' . '/setasign/fpdi/src',
+        ),
+        'chillerlan\\Settings\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/chillerlan/php-settings-container/src',
+        ),
+        'chillerlan\\QRCode\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/chillerlan/php-qrcode/src',
         ),
         'Whoops\\' => 
         array (

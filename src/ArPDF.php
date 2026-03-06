@@ -7,6 +7,7 @@ use Baidouabdellah\LaravelArpdf\Contracts\PdfPlugin;
 use Baidouabdellah\LaravelArpdf\Engines\MpdfEngine;
 use Baidouabdellah\LaravelArpdf\Pipelines\FileQueuePipeline;
 use Baidouabdellah\LaravelArpdf\Pipelines\LaravelQueuePipeline;
+use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\CertificateSignaturePlugin;
 use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\QuickQrPlugin;
 use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\SignatureBlockPlugin;
 use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\WatermarkTextPlugin;
@@ -955,6 +956,15 @@ class ArPDF
                     (string) ($options['text'] ?? ''),
                     (int) ($options['size'] ?? 110),
                     (string) ($options['position'] ?? 'bottom-left')
+                );
+            })
+            ->register('certificate_signature', function (array $options): PdfPlugin {
+                return new CertificateSignaturePlugin(
+                    (string) ($options['private_key'] ?? ''),
+                    isset($options['passphrase']) ? (string) $options['passphrase'] : null,
+                    isset($options['certificate']) ? (string) $options['certificate'] : null,
+                    isset($options['sidecar_path']) ? (string) $options['sidecar_path'] : null,
+                    (int) ($options['algorithm'] ?? OPENSSL_ALGO_SHA256)
                 );
             });
     }
