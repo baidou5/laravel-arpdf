@@ -134,6 +134,9 @@ $check = \Baidouabdellah\LaravelArpdf\ArPDF::verifySignature(
     storage_path('keys/cert.pem')
 );
 
+// Artisan command
+// php artisan arpdf:verify-signature storage/app/invoices/invoice.pdf storage/app/signatures/invoice.sig.json --cert=storage/keys/cert.pem
+
 $result = $pdf->assertSnapshot('doc-v1'); // stores/compares sha256 snapshot
 if (! $result['matched']) {
     // regression detected
