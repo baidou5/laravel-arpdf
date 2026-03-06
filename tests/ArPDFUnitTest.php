@@ -74,15 +74,75 @@ class ArPDFUnitTest extends TestCase
         $this->assertSame('<div>FOOTER</div>', $engine->lastOptions['footer_html'] ?? null);
         $this->assertSame('سري', $engine->lastOptions['watermark_text'] ?? null);
     }
+
+    public function testProfileCanBeApplied(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, [
+            'profiles' => [
+                'invoice_ar' => [
+                    'direction' => 'rtl',
+                    'paper' => 'A5',
+                    'orientation' => 'landscape',
+                ],
+            ],
+        ]);
+
+        $pdf->profile('invoice_ar')
+            ->loadHTML('<p>ok</p>')
+            ->output('doc.pdf', 'S');
+
+        $this->assertSame('rtl', $engine->lastOptions['direction'] ?? null);
+        $this->assertSame('A5', $engine->lastOptions['paper'] ?? null);
+        $this->assertSame('landscape', $engine->lastOptions['orientation'] ?? null);
+    }
+
+    public function testNamedTemplateInterpolationWorks(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+
+        $pdf->registerTemplate('invoice', '<h1>{{ title }}</h1><p>{{ customer.name }}</p>')
+            ->loadTemplate('invoice', [
+                'title' => 'فاتورة',
+                'customer' => ['name' => 'أحمد'],
+            ])
+            ->output('doc.pdf', 'S');
+
+        $this->assertStringContainsString('<h1>فاتورة</h1>', $engine->lastHtml);
+        $this->assertStringContainsString('<p>أحمد</p>', $engine->lastHtml);
+    }
+
+    public function testCacheAvoidsSecondEngineRender(): void
+    {
+        $engine = new FakeEngine();
+        $cacheDir = sys_get_temp_dir() . '/laravel-arpdf-test-cache-' . uniqid('', true);
+        mkdir($cacheDir, 0775, true);
+
+        $pdf = new ArPDF($engine, [
+            'cache' => [
+                'enabled' => true,
+                'ttl_seconds' => 3600,
+                'path' => $cacheDir,
+            ],
+        ]);
+
+        $pdf->loadHTML('<h1>مرحبا</h1>')->output('doc.pdf', 'S');
+        $pdf->reset()->loadHTML('<h1>مرحبا</h1>')->output('doc.pdf', 'S');
+
+        $this->assertSame(1, $engine->renderCalls);
+    }
 }
 
 class FakeEngine implements PdfEngine
 {
     public string $lastHtml = '';
     public array $lastOptions = [];
+    public int $renderCalls = 0;
 
     public function render(string $html, array $options = []): string
     {
+        $this->renderCalls++;
         $this->lastHtml = $html;
         $this->lastOptions = $options;
 

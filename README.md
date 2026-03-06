@@ -22,6 +22,9 @@ Arabic-first PDF generation for Laravel, rebuilt from scratch on top of **mPDF**
 - Header / footer HTML
 - Text or image watermark
 - Metadata API (`title`, `author`, `subject`, `keywords`, `creator`)
+- Reusable document profiles (`profile('invoice_ar')`)
+- Named templates with variable interpolation
+- PDF render cache for repeated documents
 
 ## Installation
 
@@ -51,6 +54,19 @@ public function invoice()
         ->loadView('pdf.invoice', ['title' => 'فاتورة'])
         ->download('invoice.pdf');
 }
+```
+
+## Production Features
+
+```php
+ArPDF::profile('invoice_ar')
+    ->registerTemplate('invoice_basic', '<h1>{{ title }}</h1><p>{{ customer.name }}</p>')
+    ->loadTemplate('invoice_basic', [
+        'title' => 'فاتورة',
+        'customer' => ['name' => 'أحمد'],
+    ])
+    ->useCache(true, 3600)
+    ->download('invoice.pdf');
 ```
 
 ## Output Destinations

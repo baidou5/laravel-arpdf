@@ -23,6 +23,14 @@ class ArPDF
 
     protected array $runtimeOptions = [];
 
+    protected array $profiles = [];
+
+    protected array $templates = [];
+
+    protected bool $cacheEnabled = false;
+
+    protected ?int $cacheTtlSeconds = null;
+
     protected ?string $cachedPdf = null;
 
     public function __construct(?PdfEngine $engine = null, array $overrideConfig = [])
@@ -36,6 +44,12 @@ class ArPDF
             'margins' => $this->config['margins'],
             'metadata' => $this->config['metadata'],
         ];
+        $this->profiles = (array) ($this->config['profiles'] ?? []);
+        $this->templates = (array) ($this->config['templates'] ?? []);
+        $this->cacheEnabled = (bool) (($this->config['cache']['enabled'] ?? false) === true);
+        $this->cacheTtlSeconds = isset($this->config['cache']['ttl_seconds'])
+            ? (int) $this->config['cache']['ttl_seconds']
+            : null;
 
         $tempDir = (string) ($this->config['temp_dir'] ?? '');
         if ($tempDir !== '' && ! is_dir($tempDir)) {
@@ -216,6 +230,73 @@ class ArPDF
         return $this;
     }
 
+    public function profile(string $name): self
+    {
+        $profile = $this->profiles[$name] ?? null;
+        if (! is_array($profile)) {
+            throw new InvalidArgumentException('Unknown profile: ' . $name);
+        }
+
+        if (isset($profile['direction'])) {
+            $this->direction((string) $profile['direction']);
+            unset($profile['direction']);
+        }
+
+        return $this->options($profile);
+    }
+
+    public function registerProfile(string $name, array $options): self
+    {
+        $this->profiles[$name] = $options;
+
+        return $this;
+    }
+
+    public function registerTemplate(string $name, callable|string $template): self
+    {
+        $this->templates[$name] = $template;
+
+        return $this;
+    }
+
+    public function loadTemplate(string $name, array $data = []): self
+    {
+        if (! array_key_exists($name, $this->templates)) {
+            throw new InvalidArgumentException('Unknown template: ' . $name);
+        }
+
+        $template = $this->templates[$name];
+        $html = $this->renderTemplateValue($template, $data);
+
+        return $this->loadHTML($html);
+    }
+
+    public function useCache(bool $enabled = true, ?int $ttlSeconds = null): self
+    {
+        $this->cacheEnabled = $enabled;
+        if ($ttlSeconds !== null) {
+            $this->cacheTtlSeconds = $ttlSeconds;
+        }
+
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function clearCache(): self
+    {
+        $cachePath = $this->cachePath();
+        if ($cachePath === null || ! is_dir($cachePath)) {
+            return $this;
+        }
+
+        foreach (glob($cachePath . '/*.pdf') ?: [] as $file) {
+            @unlink($file);
+        }
+
+        return $this;
+    }
+
     public function save(string $path): self
     {
         $this->ensureParentDirectoryExists($path);
@@ -315,7 +396,17 @@ class ArPDF
 
         $options = $this->buildRenderOptions();
         $content = implode("\n", $this->htmlParts);
+        $cacheFile = $this->resolveCacheFile($content, $options);
+        if ($cacheFile !== null && is_file($cacheFile)) {
+            $this->cachedPdf = (string) file_get_contents($cacheFile);
+
+            return $this->cachedPdf;
+        }
+
         $this->cachedPdf = $this->engine->render($content, $options);
+        if ($cacheFile !== null) {
+            file_put_contents($cacheFile, $this->cachedPdf);
+        }
 
         return $this->cachedPdf;
     }
@@ -328,6 +419,50 @@ class ArPDF
             'direction' => $this->direction,
             'css' => $css,
         ]);
+    }
+
+    protected function renderTemplateValue(callable|string $template, array $data): string
+    {
+        if (is_callable($template)) {
+            $result = $template($data, $this);
+            if (! is_string($result)) {
+                throw new RuntimeException('Template callable must return HTML string.');
+            }
+
+            return $result;
+        }
+
+        $value = $template;
+        if (is_file($value)) {
+            $value = (string) file_get_contents($value);
+        } elseif (! str_contains($value, '<') && $this->hasConfigBinding() && function_exists('view')) {
+            return (string) view($value, $data)->render();
+        }
+
+        return $this->interpolateTemplate($value, $data);
+    }
+
+    protected function interpolateTemplate(string $template, array $data): string
+    {
+        return (string) preg_replace_callback('/{{\s*([a-zA-Z0-9_.-]+)\s*}}/', function (array $matches) use ($data) {
+            $value = $this->getArrayValueByPath($data, $matches[1]);
+
+            return is_scalar($value) ? (string) $value : '';
+        }, $template);
+    }
+
+    protected function getArrayValueByPath(array $data, string $path): mixed
+    {
+        $current = $data;
+        foreach (explode('.', $path) as $segment) {
+            if (! is_array($current) || ! array_key_exists($segment, $current)) {
+                return null;
+            }
+
+            $current = $current[$segment];
+        }
+
+        return $current;
     }
 
     protected function buildBootstrapCss(): string
@@ -462,6 +597,13 @@ class ArPDF
                 'autoLangToFont' => true,
                 'autoScriptToLang' => true,
             ],
+            'profiles' => [],
+            'templates' => [],
+            'cache' => [
+                'enabled' => false,
+                'ttl_seconds' => 3600,
+                'path' => '',
+            ],
         ];
 
         $frameworkConfig = [];
@@ -476,10 +618,77 @@ class ArPDF
         if (! isset($frameworkConfig['temp_dir'])) {
             $frameworkConfig['temp_dir'] = $this->safeStoragePath('app/laravel-arpdf');
         }
+        if (! isset($frameworkConfig['cache']['path'])) {
+            $frameworkConfig['cache']['path'] = $this->safeStoragePath('app/laravel-arpdf/cache');
+        }
 
         $config = array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);
 
         return $this->normalizeFontConfig($config);
+    }
+
+    protected function resolveCacheFile(string $content, array $options): ?string
+    {
+        if (! $this->cacheEnabled) {
+            return null;
+        }
+
+        $cachePath = $this->cachePath();
+        if ($cachePath === null) {
+            return null;
+        }
+
+        if (! is_dir($cachePath)) {
+            mkdir($cachePath, 0775, true);
+        }
+
+        $signature = [
+            'engine' => get_class($this->engine),
+            'direction' => $this->direction,
+            'content' => $content,
+            'options' => $this->normalizeForHash($options),
+        ];
+        $hash = hash('sha256', json_encode($signature, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $file = rtrim($cachePath, '/\\') . '/' . $hash . '.pdf';
+
+        $ttl = $this->cacheTtlSeconds;
+        if ($ttl !== null && $ttl > 0 && is_file($file)) {
+            $age = time() - (int) filemtime($file);
+            if ($age > $ttl) {
+                @unlink($file);
+            }
+        }
+
+        return $file;
+    }
+
+    protected function cachePath(): ?string
+    {
+        $path = (string) ($this->config['cache']['path'] ?? '');
+
+        return $path !== '' ? $path : null;
+    }
+
+    protected function normalizeForHash(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            ksort($value);
+            foreach ($value as $key => $item) {
+                $value[$key] = $this->normalizeForHash($item);
+            }
+
+            return $value;
+        }
+
+        if (is_object($value)) {
+            return $this->normalizeForHash((array) $value);
+        }
+
+        if (is_resource($value)) {
+            return null;
+        }
+
+        return $value;
     }
 
     protected function normalizeFontConfig(array $config): array

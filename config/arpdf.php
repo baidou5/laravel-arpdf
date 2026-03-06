@@ -80,4 +80,51 @@ return [
         'autoScriptToLang' => true,
         'default_font_size' => 12,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ready Profiles
+    |--------------------------------------------------------------------------
+    */
+    'profiles' => [
+        'invoice_ar' => [
+            'direction' => 'rtl',
+            'paper' => 'A4',
+            'orientation' => 'portrait',
+            'margins' => [
+                'left' => 10,
+                'right' => 10,
+                'top' => 12,
+                'bottom' => 12,
+                'header' => 6,
+                'footer' => 6,
+            ],
+        ],
+        'report_ltr' => [
+            'direction' => 'ltr',
+            'paper' => 'A4',
+            'orientation' => 'portrait',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Named Templates
+    |--------------------------------------------------------------------------
+    | Example:
+    | 'invoice_basic' => '<h1>{{ title }}</h1><p>{{ customer.name }}</p>'
+    | 'invoice_view' => 'pdf.invoice'
+    */
+    'templates' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render Cache
+    |--------------------------------------------------------------------------
+    */
+    'cache' => [
+        'enabled' => false,
+        'ttl_seconds' => 3600,
+        'path' => storage_path('app/laravel-arpdf/cache'),
+    ],
 ];
