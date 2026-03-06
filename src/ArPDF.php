@@ -2,172 +2,354 @@
 
 namespace Baidouabdellah\LaravelArpdf;
 
-use Mpdf\Mpdf;
-use Mpdf\Config\ConfigVariables;
-use Mpdf\Config\FontVariables;
-use Mpdf\HTMLParserMode;
-use Mpdf\Output\Destination;
+use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
+use Baidouabdellah\LaravelArpdf\Engines\DompdfEngine;
+use InvalidArgumentException;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\HeaderUtils;
+use Throwable;
 
 class ArPDF
 {
-    protected Mpdf $mpdf;
+    protected PdfEngine $engine;
 
-    /**
-     * ArPDF constructor.
-     *
-     * You can pass your own override settings through $overrideConfig
-     */
-    public function __construct(array $overrideConfig = [])
+    protected array $config;
+
+    protected array $htmlParts = [];
+
+    protected array $cssParts = [];
+
+    protected string $direction;
+
+    protected ?string $cachedPdf = null;
+
+    public function __construct(?PdfEngine $engine = null, array $overrideConfig = [])
     {
-        // Read values from config (fallback to default values if not published)
-        $direction       = $overrideConfig['directionality'] ?? config('arpdf.direction', 'rtl');
-        $defaultFont     = $overrideConfig['default_font']    ?? config('arpdf.default_font', 'cairo');
-        $tempDir         = $overrideConfig['tempDir']         ?? config('arpdf.temp_dir', storage_path('app/laravel-arpdf'));
-        $publishedFonts  = $overrideConfig['fonts_path']      ?? config('arpdf.fonts_path', resource_path('fonts/arpdf'));
+        $this->config = $this->resolveConfig($overrideConfig);
+        $this->direction = strtolower((string) ($this->config['direction'] ?? 'rtl'));
+        $this->engine = $engine ?? new DompdfEngine($this->config);
 
-        // Ensure temp directory exists
-        if (! is_dir($tempDir)) {
-            @mkdir($tempDir, 0775, true);
-        }
-
-        // Default mPDF configuration
-        $defaultConfig = (new ConfigVariables())->getDefaults();
-        $fontDirs      = $defaultConfig['fontDir'];
-
-        $fontConfig = (new FontVariables())->getDefaults();
-        $fontData   = $fontConfig['fontdata'];
-
-        // Extra fonts loaded from config/arpdf.php
-        $extraFonts = config('arpdf.fonts', []);
-
-        // Final mPDF configuration (merged with overrides)
-        $mpdfConfig = array_merge([
-            'mode'              => 'utf-8',
-            'format'            => 'A4',
-            'orientation'       => 'P',
-            'tempDir'           => $tempDir,
-            'margin_left'       => 10,
-            'margin_right'      => 10,
-            'margin_top'        => 10,
-            'margin_bottom'     => 10,
-            'margin_header'     => 5,
-            'margin_footer'     => 5,
-            'default_font_size' => 12,
-
-            // Disable auto font detection to force using cairo font
-            'autoLangToFont'    => false,
-            'autoScriptToLang'  => false,
-
-            'directionality'    => $direction,
-
-            // Merge default fonts directory with published fonts
-            'fontDir'           => array_merge($fontDirs, [$publishedFonts]),
-            'fontdata'          => $fontData + $extraFonts,
-            'default_font'      => $defaultFont,
-        ], $overrideConfig);
-
-        // Initialize mPDF
-        $this->mpdf = new Mpdf($mpdfConfig);
-
-        // Ensure default font is applied
-        if ($defaultFont) {
-            $this->mpdf->SetFont($defaultFont);
+        $tempDir = (string) ($this->config['temp_dir'] ?? '');
+        if ($tempDir !== '' && ! is_dir($tempDir)) {
+            mkdir($tempDir, 0775, true);
         }
     }
 
-    /**
-     * Load raw HTML content
-     */
-    public function loadHTML(string $html, int $mode = HTMLParserMode::DEFAULT_MODE): self
+    public function loadHTML(string $html, int $mode = ArPdfParserMode::DEFAULT_MODE): self
     {
-        $this->mpdf->WriteHTML($html, $mode);
+        if ($mode === ArPdfParserMode::HEADER_CSS) {
+            return $this->loadCSS($html);
+        }
+
+        $this->htmlParts[] = $html;
+        $this->cachedPdf = null;
+
         return $this;
     }
 
-    /**
-     * Load Blade view directly
-     */
-    public function loadView(string $view, array $data = [], int $mode = HTMLParserMode::DEFAULT_MODE): self
+    public function loadView(string $view, array $data = [], int $mode = ArPdfParserMode::DEFAULT_MODE): self
     {
+        if (! function_exists('view')) {
+            throw new RuntimeException('The view() helper is unavailable in the current context.');
+        }
+
         $html = view($view, $data)->render();
+
         return $this->loadHTML($html, $mode);
     }
 
-    /**
-     * Load CSS separately
-     */
     public function loadCSS(string $css): self
     {
-        $this->mpdf->WriteHTML($css, HTMLParserMode::HEADER_CSS);
+        $this->cssParts[] = $css;
+        $this->cachedPdf = null;
+
         return $this;
     }
 
-    /**
-     * Change document direction (RTL or LTR)
-     */
     public function direction(string $dir = 'rtl'): self
     {
-        $this->mpdf->SetDirectionality($dir);
+        $normalized = strtolower($dir);
+        if (! in_array($normalized, ['rtl', 'ltr'], true)) {
+            throw new InvalidArgumentException('Direction must be either "rtl" or "ltr".');
+        }
+
+        $this->direction = $normalized;
+        $this->cachedPdf = null;
+
         return $this;
     }
 
-    /**
-     * Save PDF file on the server
-     */
     public function save(string $path): self
     {
-        $this->mpdf->Output($path, Destination::FILE);
+        $this->ensureParentDirectoryExists($path);
+        file_put_contents($path, $this->renderBinary());
+
         return $this;
     }
 
-    /**
-     * Stream PDF inline in browser
-     */
     public function stream(string $filename = 'document.pdf')
     {
-        $content = $this->mpdf->Output($filename, Destination::STRING_RETURN);
+        $content = $this->renderBinary();
 
-        return response($content, 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
-        ]);
+        return $this->makeBinaryResponse($content, $filename, false);
     }
 
-    /**
-     * Force PDF download
-     */
     public function download(string $filename = 'document.pdf')
     {
-        $content = $this->mpdf->Output($filename, Destination::STRING_RETURN);
+        $content = $this->renderBinary();
 
-        return response($content, 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-        ]);
+        return $this->makeBinaryResponse($content, $filename, true);
     }
 
-    /**
-     * Direct interface for mPDF::Output (for advanced users)
-     */
-    public function output(string $filename = 'document.pdf', string $dest = Destination::INLINE)
+    public function output(string $filename = 'document.pdf', string $dest = ArPdfDestination::INLINE)
     {
-        return $this->mpdf->Output($filename, $dest);
+        $destination = $this->normalizeDestination($dest);
+        $content = $this->renderBinary();
+
+        if ($destination === ArPdfDestination::STRING_RETURN) {
+            return $content;
+        }
+
+        if ($destination === ArPdfDestination::FILE) {
+            $this->ensureParentDirectoryExists($filename);
+            file_put_contents($filename, $content);
+
+            return null;
+        }
+
+        if ($destination === ArPdfDestination::DOWNLOAD) {
+            return $this->makeBinaryResponse($content, $filename, true);
+        }
+
+        return $this->makeBinaryResponse($content, $filename, false);
     }
 
-    /**
-     * Compatibility with older code using render()
-     */
     public function render(string $html, string $fileName = 'document.pdf', string $dest = 'I')
     {
-        $this->mpdf->WriteHTML($html);
-        return $this->mpdf->Output($fileName, $dest);
+        $this->reset();
+        $this->loadHTML($html);
+
+        return $this->output($fileName, $dest);
     }
 
-    /**
-     * Return the internal mPDF instance for direct manipulation
-     */
-    public function getMpdf(): Mpdf
+    public function getMpdf()
     {
-        return $this->mpdf;
+        throw new RuntimeException(
+            'getMpdf() is no longer available because this package no longer depends on mPDF.'
+        );
+    }
+
+    public function getEngine(): PdfEngine
+    {
+        return $this->engine;
+    }
+
+    public function reset(): self
+    {
+        $this->htmlParts = [];
+        $this->cssParts = [];
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    protected function renderBinary(): string
+    {
+        if ($this->cachedPdf !== null) {
+            return $this->cachedPdf;
+        }
+
+        $html = $this->buildHtmlDocument();
+        $this->cachedPdf = $this->engine->render($html, $this->config);
+
+        return $this->cachedPdf;
+    }
+
+    protected function buildHtmlDocument(): string
+    {
+        $bootstrapCss = $this->buildBootstrapCss();
+        $customCss = implode("\n", $this->cssParts);
+        $content = implode("\n", $this->htmlParts);
+
+        return '<!doctype html><html lang="ar" dir="' . $this->direction . '"><head><meta charset="UTF-8">'
+            . '<style>' . $bootstrapCss . "\n" . $customCss . '</style></head><body>'
+            . $content
+            . '</body></html>';
+    }
+
+    protected function buildBootstrapCss(): string
+    {
+        $css = [];
+        $defaultFont = (string) ($this->config['default_font'] ?? 'sans-serif');
+        $fontPath = rtrim((string) ($this->config['fonts_path'] ?? ''), '/');
+        $fontMap = (array) ($this->config['fonts'] ?? []);
+
+        foreach ($fontMap as $fontName => $fontFiles) {
+            if (! is_array($fontFiles)) {
+                continue;
+            }
+
+            $regularFile = $fontFiles['R'] ?? null;
+            $boldFile = $fontFiles['B'] ?? null;
+
+            if (is_string($regularFile) && $fontPath !== '') {
+                $fullPath = $fontPath . '/' . ltrim($regularFile, '/');
+                if (is_file($fullPath)) {
+                    $css[] = "@font-face{font-family:'{$fontName}';font-style:normal;font-weight:400;src:url('"
+                        . $this->toCssFileUrl($fullPath)
+                        . "') format('truetype');}";
+                }
+            }
+
+            if (is_string($boldFile) && $fontPath !== '') {
+                $fullPath = $fontPath . '/' . ltrim($boldFile, '/');
+                if (is_file($fullPath)) {
+                    $css[] = "@font-face{font-family:'{$fontName}';font-style:normal;font-weight:700;src:url('"
+                        . $this->toCssFileUrl($fullPath)
+                        . "') format('truetype');}";
+                }
+            }
+        }
+
+        $css[] = "html,body{direction:{$this->direction};font-family:'{$defaultFont}',sans-serif;}";
+
+        return implode("\n", $css);
+    }
+
+    protected function toCssFileUrl(string $path): string
+    {
+        $normalized = str_replace(DIRECTORY_SEPARATOR, '/', $path);
+        $encoded = rawurlencode($normalized);
+        $encoded = str_replace('%2F', '/', $encoded);
+
+        return 'file://' . $encoded;
+    }
+
+    protected function normalizeDestination(string $dest): string
+    {
+        $value = strtolower($dest);
+
+        $map = [
+            'i' => ArPdfDestination::INLINE,
+            'd' => ArPdfDestination::DOWNLOAD,
+            'f' => ArPdfDestination::FILE,
+            's' => ArPdfDestination::STRING_RETURN,
+            ArPdfDestination::INLINE => ArPdfDestination::INLINE,
+            ArPdfDestination::DOWNLOAD => ArPdfDestination::DOWNLOAD,
+            ArPdfDestination::FILE => ArPdfDestination::FILE,
+            ArPdfDestination::STRING_RETURN => ArPdfDestination::STRING_RETURN,
+        ];
+
+        if (! isset($map[$value])) {
+            throw new InvalidArgumentException('Unsupported output destination: ' . $dest);
+        }
+
+        return $map[$value];
+    }
+
+    protected function makeBinaryResponse(string $content, string $filename, bool $asAttachment)
+    {
+        $safeFilename = $this->ensurePdfFilename($filename);
+        $dispositionType = $asAttachment ? 'attachment' : 'inline';
+
+        if (class_exists(HeaderUtils::class)) {
+            $disposition = HeaderUtils::makeDisposition($dispositionType, $safeFilename);
+        } else {
+            $disposition = $dispositionType . '; filename="' . addslashes($safeFilename) . '"';
+        }
+
+        if (function_exists('response')) {
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => $disposition,
+                'Content-Length' => (string) strlen($content),
+            ]);
+        }
+
+        return $content;
+    }
+
+    protected function ensurePdfFilename(string $filename): string
+    {
+        return str_ends_with(strtolower($filename), '.pdf') ? $filename : $filename . '.pdf';
+    }
+
+    protected function ensureParentDirectoryExists(string $path): void
+    {
+        $directory = dirname($path);
+        if ($directory !== '.' && ! is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+    }
+
+    protected function resolveConfig(array $overrideConfig): array
+    {
+        $defaultConfig = [
+            'direction' => 'rtl',
+            'default_font' => 'cairo',
+            'temp_dir' => sys_get_temp_dir() . '/laravel-arpdf',
+            'fonts_path' => '',
+            'fonts' => [],
+            'paper' => 'a4',
+            'orientation' => 'portrait',
+            'enable_remote_assets' => false,
+            'dompdf_options' => [
+                'isHtml5ParserEnabled' => true,
+                'isFontSubsettingEnabled' => true,
+                'defaultPaperSize' => 'a4',
+            ],
+        ];
+
+        $frameworkConfig = [];
+        if ($this->hasConfigBinding()) {
+            $frameworkConfig = (array) config('arpdf', []);
+        }
+
+        if (! isset($frameworkConfig['fonts_path'])) {
+            $frameworkConfig['fonts_path'] = $this->safeResourcePath('fonts/arpdf');
+        }
+
+        if (! isset($frameworkConfig['temp_dir'])) {
+            $frameworkConfig['temp_dir'] = $this->safeStoragePath('app/laravel-arpdf');
+        }
+
+        return array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);
+    }
+
+    protected function hasConfigBinding(): bool
+    {
+        if (! function_exists('app') || ! function_exists('config')) {
+            return false;
+        }
+
+        try {
+            return app()->bound('config');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    protected function safeResourcePath(string $path): string
+    {
+        if (function_exists('resource_path')) {
+            try {
+                return resource_path($path);
+            } catch (Throwable) {
+            }
+        }
+
+        return getcwd() . '/resources/' . ltrim($path, '/');
+    }
+
+    protected function safeStoragePath(string $path): string
+    {
+        if (function_exists('storage_path')) {
+            try {
+                return storage_path($path);
+            } catch (Throwable) {
+            }
+        }
+
+        return sys_get_temp_dir() . '/laravel-arpdf';
     }
 }

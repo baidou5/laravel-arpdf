@@ -2,145 +2,75 @@
 
 # Laravel ArPDF
 
-A Laravel package for generating **PDF files with full Arabic and English support**, including **UTF-8**, **RTL**, and **custom font integration**, using the powerful **mPDF** engine — all **without relying on external services**.
+A Laravel package for generating Arabic-friendly PDF files with UTF-8 + RTL support.
 
----
+This version is **driver-based** and does **not depend on mPDF**. The default engine is **Dompdf**.
 
-## 🚀 Features
+## Features
 
-- ✔️ Fully supports **Arabic**, **RTL**, **UTF-8**, and mixed languages  
-- ✔️ Clean & simple **Laravel-style API**  
-- ✔️ Includes **Facade** + **Auto-Discovery**  
-- ✔️ Works with **Laravel 8, 9, 10, 11, 12**  
-- ✔️ Supports **custom Arabic fonts** (Cairo, Amiri, etc.)  
-- ✔️ High-quality rendering powered by **mPDF**  
-- ✔️ Save, download, or stream PDFs from your controller  
+- Arabic + RTL + UTF-8 support
+- Laravel-friendly fluent API
+- Driver-based architecture for large projects
+- Per-resolution binding (safer for Octane/workers)
+- Custom fonts via config (`R`/`B` map)
+- Stream, download, save, or return raw PDF bytes
 
----
-
-## 📦 Installation
-
-Install the package via Composer:
+## Installation
 
 ```bash
 composer require baidouabdellah/laravel-arpdf
 ```
 
-### ✔ Laravel 8+  
-No configuration is required — Laravel automatically discovers the package.
-
-### ✔ For Laravel < 8 (Manual Registration)
-
-Add the service provider to `config/app.php`:
-
-```php
-'providers' => [
-    Baidouabdellah\LaravelArpdf\ArPDFServiceProvider::class,
-],
-```
-
-### Publish Configuration
+Publish config/fonts (optional):
 
 ```bash
 php artisan vendor:publish --provider="Baidouabdellah\LaravelArpdf\ArPDFServiceProvider"
 ```
 
-This allows customizing fonts, default direction (RTL/LTR), and mPDF settings.
-
----
-
-## 🧪 Usage Example
-
-### Controller Demo
+## Quick Usage
 
 ```php
-use Baidouabdellah\LaravelArpdf\Facades\ArPDF;
+use ArPDF;
 
-
-  public function generatePdf()
-    {
-        return ArPDF::loadView('arpdf-test', [
-            'title'   => 'اللغة الرعبية هي العنوان',
-            'message' => 'نمودجي لنص عربي من اليمين الى اليسار',
-        ])->stream('view-test.pdf');
-    }
-```
-
----
-
-## 📄 Blade View Example
-
-Create a view such as:
-
-`resources/views/pdf/invoice.blade.php`
-
-```html
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {
-            font-family: 'cairo';
-            direction: rtl;
-            text-align: right;
-        }
-    </style>
-</head>
-<body>
-    <h1>{{ $title }}</h1>
-    <p>مرحبا بك في نظام الفواتير.</p>
-</body>
-</html>
-```
-
-Render and export:
-
-```php
-$html = view('pdf.invoice', [
-    'title' => 'فاتورة رقم 123'
-])->render();
-
-return ArPDF::loadHTML($html)->download('invoice-123.pdf');
-```
-
----
-
-## 🔤 Custom Arabic Fonts
-
-mPDF supports custom fonts such as **Cairo**, **Amiri**, **Scheherazade**, etc.
-
-To use your own fonts:
-
-1. Place fonts inside a folder, e.g.:  
-   `resources/fonts/`
-2. Register them inside `ArPDF.php` (font bootstrap section)
-3. Use them in CSS:
-
-```css
-body {
-    font-family: 'cairo';
+public function invoice()
+{
+    return ArPDF::direction('rtl')
+        ->loadView('pdf.invoice', ['title' => 'فاتورة'])
+        ->download('invoice.pdf');
 }
 ```
 
----
+## Output Destinations
 
-## 📞 Support
+`output($filename, $dest)` supports both legacy and named destinations:
 
-If you encounter any issue, feel free to open a ticket here:  
-👉 https://github.com/baidou5/laravel-arpdf/issues
+- Legacy: `I`, `D`, `F`, `S`
+- Named: `inline`, `download`, `file`, `string`
 
----
+## Configuration
 
-### 👤 Author
+`config/arpdf.php` includes:
 
-**Abdellah Baidou**  
-📱 Phone: **+212 661-176711**  
-📧 Email: **baidou.abd@gmail.com**
+- `direction`, `default_font`
+- `temp_dir`, `fonts_path`, `fonts`
+- `paper`, `orientation`
+- `dompdf_options`
+- `enable_remote_assets`, `chroot`
 
----
+## Testing
 
-## 📄 License
+```bash
+vendor/bin/phpunit -c tests/phpunit.xml
+```
 
-This package is licensed under the **MIT License**.  
-See the [LICENSE](LICENSE) file for more information.
+## Upgrade Notes
+
+For migration from old mPDF-based versions, see `UPGRADE.md`.
+
+## Extending with Your Own Engine
+
+Implement `Baidouabdellah\LaravelArpdf\Contracts\PdfEngine` and bind it in your app container.
+
+## License
+
+MIT
