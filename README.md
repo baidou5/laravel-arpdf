@@ -21,7 +21,7 @@ ArPDF solves this by giving you a clean Laravel API and stable defaults focused 
 
 - Full Arabic + RTL + UTF-8 support
 - Fluent Laravel API
-- Clean architecture with configurable rendering engine (default: Dompdf)
+- Clean architecture with configurable rendering engine (default: mPDF)
 - Works well in web requests, jobs, and worker environments
 - Custom font mapping from configuration
 - Multiple output targets: stream, download, save, raw string

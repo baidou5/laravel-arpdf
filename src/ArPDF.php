@@ -4,6 +4,7 @@ namespace Baidouabdellah\LaravelArpdf;
 
 use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
 use Baidouabdellah\LaravelArpdf\Engines\DompdfEngine;
+use Baidouabdellah\LaravelArpdf\Engines\MpdfEngine;
 use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -27,7 +28,7 @@ class ArPDF
     {
         $this->config = $this->resolveConfig($overrideConfig);
         $this->direction = strtolower((string) ($this->config['direction'] ?? 'rtl'));
-        $this->engine = $engine ?? new DompdfEngine($this->config);
+        $this->engine = $engine ?? $this->resolveDefaultEngine();
 
         $tempDir = (string) ($this->config['temp_dir'] ?? '');
         if ($tempDir !== '' && ! is_dir($tempDir)) {
@@ -285,6 +286,7 @@ class ArPDF
     protected function resolveConfig(array $overrideConfig): array
     {
         $defaultConfig = [
+            'engine' => 'mpdf',
             'direction' => 'rtl',
             'default_font' => 'cairo',
             'temp_dir' => sys_get_temp_dir() . '/laravel-arpdf',
@@ -316,6 +318,21 @@ class ArPDF
         $config = array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);
 
         return $this->normalizeFontConfig($config);
+    }
+
+    protected function resolveDefaultEngine(): PdfEngine
+    {
+        $preferred = strtolower((string) ($this->config['engine'] ?? 'mpdf'));
+
+        if ($preferred === 'dompdf') {
+            return new DompdfEngine($this->config);
+        }
+
+        if (class_exists(\Mpdf\Mpdf::class)) {
+            return new MpdfEngine($this->config);
+        }
+
+        return new DompdfEngine($this->config);
     }
 
     protected function normalizeFontConfig(array $config): array

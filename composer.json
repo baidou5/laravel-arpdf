@@ -1,12 +1,13 @@
 {
   "name": "baidouabdellah/laravel-arpdf",
-  "description": "Generate Arabic-friendly PDFs in Laravel with a driver-based architecture (Dompdf by default)",
+  "description": "Generate Arabic-friendly PDFs in Laravel with a driver-based architecture (mPDF by default)",
   "type": "library",
   "license": "MIT",
   "require": {
     "php": "^8.0",
     "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0 || ^12.0",
-    "dompdf/dompdf": "^2.0 || ^3.0"
+    "dompdf/dompdf": "^2.0 || ^3.0",
+    "mpdf/mpdf": "^8.2"
   },
   "require-dev": {
     "phpunit/phpunit": "^10.5 || ^11.0",

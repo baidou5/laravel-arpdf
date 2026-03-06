@@ -4,6 +4,7 @@ namespace Baidouabdellah\LaravelArpdf;
 
 use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
 use Baidouabdellah\LaravelArpdf\Engines\DompdfEngine;
+use Baidouabdellah\LaravelArpdf\Engines\MpdfEngine;
 use Illuminate\Support\ServiceProvider;
 
 class ArPDFServiceProvider extends ServiceProvider
@@ -16,7 +17,18 @@ class ArPDFServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(PdfEngine::class, function () {
-            return new DompdfEngine((array) config('arpdf', []));
+            $config = (array) config('arpdf', []);
+            $engine = strtolower((string) ($config['engine'] ?? 'mpdf'));
+
+            if ($engine === 'dompdf') {
+                return new DompdfEngine($config);
+            }
+
+            if (class_exists(\Mpdf\Mpdf::class)) {
+                return new MpdfEngine($config);
+            }
+
+            return new DompdfEngine($config);
         });
 
         $this->app->bind(ArPDF::class, function ($app) {
