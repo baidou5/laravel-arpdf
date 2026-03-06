@@ -2,6 +2,31 @@
 
 All notable changes to `baidouabdellah/laravel-arpdf` are documented in this file.
 
+## [3.0.0] - 2026-03-06
+
+### Added
+- Complete rewrite around `mPDF` with Arabic-first rendering defaults.
+- Advanced API: headers/footers, metadata, page setup, watermarks, profiles, templates, and report builder.
+- Template engine with layouts, sections, and components.
+- Queue pipelines:
+  - File-based queue pipeline.
+  - Laravel queue pipeline (`dispatch` / `dispatchSync`).
+- Plugin system:
+  - Core plugin contracts and manager.
+  - Plugin registry with named marketplace entries.
+  - Built-in plugins: `watermark_text`, `signature_block`, `quick_qr`, `certificate_signature`.
+- Offline QR generation using `chillerlan/php-qrcode`.
+- Snapshot testing manager and `assertSnapshot()` support.
+- Certificate signature sidecar verification API: `ArPDF::verifySignature(...)`.
+- Artisan command: `arpdf:verify-signature`.
+
+### Changed
+- `ArPDF` is now a production-focused orchestration layer with plugin hooks (`beforeRender` / `afterRender`).
+- Package documentation updated for new v3 architecture and workflows.
+
+### Removed
+- Legacy Dompdf-oriented architecture and related internals.
+
 ## [2.0.0] - 2026-03-06
 
 ### Added

@@ -1,5 +1,6 @@
 {
   "name": "baidouabdellah/laravel-arpdf",
+  "version": "3.0.0",
   "description": "Generate Arabic-friendly PDFs in Laravel with a driver-based architecture (mPDF by default)",
   "type": "library",
   "license": "MIT",
