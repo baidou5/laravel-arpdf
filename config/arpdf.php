@@ -153,4 +153,15 @@ return [
     'snapshots' => [
         'path' => base_path('tests/__snapshots__'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Built-in Plugin Marketplace
+    |--------------------------------------------------------------------------
+    */
+    'plugin_marketplace' => [
+        'watermark_text',
+        'signature_block',
+        'quick_qr',
+    ],
 ];

@@ -7,7 +7,11 @@ use Baidouabdellah\LaravelArpdf\Contracts\PdfPlugin;
 use Baidouabdellah\LaravelArpdf\Engines\MpdfEngine;
 use Baidouabdellah\LaravelArpdf\Pipelines\FileQueuePipeline;
 use Baidouabdellah\LaravelArpdf\Pipelines\LaravelQueuePipeline;
+use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\QuickQrPlugin;
+use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\SignatureBlockPlugin;
+use Baidouabdellah\LaravelArpdf\Plugins\BuiltIn\WatermarkTextPlugin;
 use Baidouabdellah\LaravelArpdf\Plugins\PluginManager;
+use Baidouabdellah\LaravelArpdf\Plugins\PluginRegistry;
 use Baidouabdellah\LaravelArpdf\Reports\ReportBuilder;
 use Baidouabdellah\LaravelArpdf\Templates\TemplateEngine;
 use Baidouabdellah\LaravelArpdf\Testing\PdfSnapshotManager;
@@ -42,6 +46,8 @@ class ArPDF
 
     protected PluginManager $pluginManager;
 
+    protected PluginRegistry $pluginRegistry;
+
     protected bool $cacheEnabled = false;
 
     protected ?int $cacheTtlSeconds = null;
@@ -67,8 +73,11 @@ class ArPDF
         $this->cacheTtlSeconds = isset($this->config['cache']['ttl_seconds'])
             ? (int) $this->config['cache']['ttl_seconds']
             : null;
+
         $this->templateEngine = new TemplateEngine($this->templates, $this->layouts, $this->components);
         $this->pluginManager = new PluginManager();
+        $this->pluginRegistry = new PluginRegistry();
+        $this->registerBuiltInPlugins();
 
         $tempDir = (string) ($this->config['temp_dir'] ?? '');
         if ($tempDir !== '' && ! is_dir($tempDir)) {
@@ -94,9 +103,7 @@ class ArPDF
             throw new RuntimeException('The view() helper is unavailable in the current context.');
         }
 
-        $html = view($view, $data)->render();
-
-        return $this->loadHTML($html, $mode);
+        return $this->loadHTML((string) view($view, $data)->render(), $mode);
     }
 
     public function loadCSS(string $css): self
@@ -193,8 +200,7 @@ class ArPDF
 
     public function metadata(array $metadata): self
     {
-        $existing = (array) ($this->runtimeOptions['metadata'] ?? []);
-        $this->runtimeOptions['metadata'] = array_merge($existing, $metadata);
+        $this->runtimeOptions['metadata'] = array_merge((array) ($this->runtimeOptions['metadata'] ?? []), $metadata);
         $this->cachedPdf = null;
 
         return $this;
@@ -297,9 +303,7 @@ class ArPDF
 
     public function loadTemplate(string $name, array $data = []): self
     {
-        $html = $this->templateEngine->render($name, $data);
-
-        return $this->loadHTML($html);
+        return $this->loadHTML($this->templateEngine->render($name, $data));
     }
 
     public function report(callable|ReportBuilder $report): self
@@ -337,16 +341,16 @@ class ArPDF
         return $this;
     }
 
-    public function assertSnapshot(string $name, ?string $directory = null, bool $update = false): array
+    public function registerPlugin(string $name, callable|PdfPlugin $factory): self
     {
-        $bytes = $this->renderBinary();
-        $manager = new PdfSnapshotManager();
-        $directory = $directory ?: (string) ($this->config['snapshots']['path'] ?? '');
-        if ($directory === '') {
-            $directory = getcwd() . '/tests/__snapshots__';
-        }
+        $this->pluginRegistry->register($name, $factory);
 
-        return $manager->assertSnapshot($name, $bytes, $directory, $update);
+        return $this;
+    }
+
+    public function usePluginNamed(string $name, array $options = []): self
+    {
+        return $this->usePlugin($this->pluginRegistry->resolve($name, $options));
     }
 
     public function useCache(bool $enabled = true, ?int $ttlSeconds = null): self
@@ -483,6 +487,18 @@ class ArPDF
         return $this;
     }
 
+    public function assertSnapshot(string $name, ?string $directory = null, bool $update = false): array
+    {
+        $bytes = $this->renderBinary();
+        $manager = new PdfSnapshotManager();
+        $directory = $directory ?: (string) ($this->config['snapshots']['path'] ?? '');
+        if ($directory === '') {
+            $directory = getcwd() . '/tests/__snapshots__';
+        }
+
+        return $manager->assertSnapshot($name, $bytes, $directory, $update);
+    }
+
     public function reset(): self
     {
         $this->htmlParts = [];
@@ -507,6 +523,7 @@ class ArPDF
 
         $options = $this->buildRenderOptions();
         $content = implode("\n", $this->htmlParts);
+
         $pluginResult = $this->pluginManager->beforeRender($this, $content, $options);
         $content = (string) ($pluginResult['html'] ?? $content);
         $options = (array) ($pluginResult['options'] ?? $options);
@@ -524,6 +541,7 @@ class ArPDF
             'options' => $options,
             'cache_file' => $cacheFile,
         ]);
+
         if ($cacheFile !== null) {
             file_put_contents($cacheFile, $this->cachedPdf);
         }
@@ -539,50 +557,6 @@ class ArPDF
             'direction' => $this->direction,
             'css' => $css,
         ]);
-    }
-
-    protected function renderTemplateValue(callable|string $template, array $data): string
-    {
-        if (is_callable($template)) {
-            $result = $template($data, $this);
-            if (! is_string($result)) {
-                throw new RuntimeException('Template callable must return HTML string.');
-            }
-
-            return $result;
-        }
-
-        $value = $template;
-        if (is_file($value)) {
-            $value = (string) file_get_contents($value);
-        } elseif (! str_contains($value, '<') && $this->hasConfigBinding() && function_exists('view')) {
-            return (string) view($value, $data)->render();
-        }
-
-        return $this->interpolateTemplate($value, $data);
-    }
-
-    protected function interpolateTemplate(string $template, array $data): string
-    {
-        return (string) preg_replace_callback('/{{\s*([a-zA-Z0-9_.-]+)\s*}}/', function (array $matches) use ($data) {
-            $value = $this->getArrayValueByPath($data, $matches[1]);
-
-            return is_scalar($value) ? (string) $value : '';
-        }, $template);
-    }
-
-    protected function getArrayValueByPath(array $data, string $path): mixed
-    {
-        $current = $data;
-        foreach (explode('.', $path) as $segment) {
-            if (! is_array($current) || ! array_key_exists($segment, $current)) {
-                return null;
-            }
-
-            $current = $current[$segment];
-        }
-
-        return $current;
     }
 
     protected function buildBootstrapCss(): string
@@ -742,7 +716,6 @@ class ArPDF
         if (! isset($frameworkConfig['fonts_path'])) {
             $frameworkConfig['fonts_path'] = $this->safeResourcePath('fonts/arpdf');
         }
-
         if (! isset($frameworkConfig['temp_dir'])) {
             $frameworkConfig['temp_dir'] = $this->safeStoragePath('app/laravel-arpdf');
         }
@@ -958,5 +931,31 @@ class ArPDF
         }
 
         return sys_get_temp_dir() . '/laravel-arpdf';
+    }
+
+    protected function registerBuiltInPlugins(): void
+    {
+        $this->pluginRegistry
+            ->register('watermark_text', function (array $options): PdfPlugin {
+                return new WatermarkTextPlugin(
+                    (string) ($options['text'] ?? ''),
+                    (float) ($options['alpha'] ?? 0.1)
+                );
+            })
+            ->register('signature_block', function (array $options): PdfPlugin {
+                return new SignatureBlockPlugin(
+                    (string) ($options['signer'] ?? ''),
+                    isset($options['title']) ? (string) $options['title'] : null,
+                    isset($options['image']) ? (string) $options['image'] : null,
+                    (bool) ($options['rtl'] ?? true)
+                );
+            })
+            ->register('quick_qr', function (array $options): PdfPlugin {
+                return new QuickQrPlugin(
+                    (string) ($options['text'] ?? ''),
+                    (int) ($options['size'] ?? 110),
+                    (string) ($options['position'] ?? 'bottom-left')
+                );
+            });
     }
 }

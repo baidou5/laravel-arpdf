@@ -240,6 +240,39 @@ class ArPDFUnitTest extends TestCase
 
         $this->assertFileExists($output);
     }
+
+    public function testNamedWatermarkPluginUpdatesOptions(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+
+        $pdf->usePluginNamed('watermark_text', [
+            'text' => 'CONFIDENTIAL',
+            'alpha' => 0.2,
+        ])->loadHTML('<h1>doc</h1>')
+            ->output('doc.pdf', 'S');
+
+        $this->assertSame('CONFIDENTIAL', $engine->lastOptions['watermark_text'] ?? null);
+        $this->assertSame(0.2, $engine->lastOptions['watermark_text_alpha'] ?? null);
+    }
+
+    public function testNamedSignatureAndQrPluginsModifyHtml(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+
+        $pdf->usePluginNamed('signature_block', [
+            'signer' => 'Admin',
+            'title' => 'CTO',
+        ])->usePluginNamed('quick_qr', [
+            'text' => 'INV-1001',
+            'size' => 90,
+        ])->loadHTML('<h1>Invoice</h1>')
+            ->output('doc.pdf', 'S');
+
+        $this->assertStringContainsString('Admin', $engine->lastHtml);
+        $this->assertStringContainsString('quickchart.io/qr', $engine->lastHtml);
+    }
 }
 
 class FakeEngine implements PdfEngine

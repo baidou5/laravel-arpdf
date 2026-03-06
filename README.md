@@ -29,6 +29,7 @@ Arabic-first PDF generation for Laravel, rebuilt from scratch on top of **mPDF**
 - File queue pipeline for deferred rendering
 - Laravel queue pipeline (`dispatch` / `dispatchSync`)
 - Plugin API (before/after render hooks)
+- Plugin marketplace with named built-ins (`watermark_text`, `signature_block`, `quick_qr`)
 - Snapshot testing workflow for PDF regression checks
 - PDF render cache for repeated documents
 
@@ -115,6 +116,11 @@ class FooterPlugin implements PdfPlugin {
 }
 
 $pdf->usePlugin(new FooterPlugin())->loadHTML('<h1>Doc</h1>');
+
+$pdf->usePluginNamed('watermark_text', ['text' => 'CONFIDENTIAL', 'alpha' => 0.15])
+    ->usePluginNamed('signature_block', ['signer' => 'Admin', 'title' => 'CTO'])
+    ->usePluginNamed('quick_qr', ['text' => 'INV-1001', 'size' => 90])
+    ->loadHTML('<h1>Invoice</h1>');
 
 $result = $pdf->assertSnapshot('doc-v1'); // stores/compares sha256 snapshot
 if (! $result['matched']) {
