@@ -4,6 +4,9 @@ namespace Baidouabdellah\LaravelArpdf;
 
 use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
 use Baidouabdellah\LaravelArpdf\Engines\MpdfEngine;
+use Baidouabdellah\LaravelArpdf\Pipelines\FileQueuePipeline;
+use Baidouabdellah\LaravelArpdf\Reports\ReportBuilder;
+use Baidouabdellah\LaravelArpdf\Templates\TemplateEngine;
 use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -27,6 +30,12 @@ class ArPDF
 
     protected array $templates = [];
 
+    protected array $layouts = [];
+
+    protected array $components = [];
+
+    protected TemplateEngine $templateEngine;
+
     protected bool $cacheEnabled = false;
 
     protected ?int $cacheTtlSeconds = null;
@@ -46,10 +55,13 @@ class ArPDF
         ];
         $this->profiles = (array) ($this->config['profiles'] ?? []);
         $this->templates = (array) ($this->config['templates'] ?? []);
+        $this->layouts = (array) ($this->config['layouts'] ?? []);
+        $this->components = (array) ($this->config['components'] ?? []);
         $this->cacheEnabled = (bool) (($this->config['cache']['enabled'] ?? false) === true);
         $this->cacheTtlSeconds = isset($this->config['cache']['ttl_seconds'])
             ? (int) $this->config['cache']['ttl_seconds']
             : null;
+        $this->templateEngine = new TemplateEngine($this->templates, $this->layouts, $this->components);
 
         $tempDir = (string) ($this->config['temp_dir'] ?? '');
         if ($tempDir !== '' && ! is_dir($tempDir)) {
@@ -255,20 +267,54 @@ class ArPDF
     public function registerTemplate(string $name, callable|string $template): self
     {
         $this->templates[$name] = $template;
+        $this->templateEngine->registerTemplate($name, $template);
+
+        return $this;
+    }
+
+    public function registerLayout(string $name, callable|string $layout): self
+    {
+        $this->layouts[$name] = $layout;
+        $this->templateEngine->registerLayout($name, $layout);
+
+        return $this;
+    }
+
+    public function registerComponent(string $name, callable|string $component): self
+    {
+        $this->components[$name] = $component;
+        $this->templateEngine->registerComponent($name, $component);
 
         return $this;
     }
 
     public function loadTemplate(string $name, array $data = []): self
     {
-        if (! array_key_exists($name, $this->templates)) {
-            throw new InvalidArgumentException('Unknown template: ' . $name);
-        }
-
-        $template = $this->templates[$name];
-        $html = $this->renderTemplateValue($template, $data);
+        $html = $this->templateEngine->render($name, $data);
 
         return $this->loadHTML($html);
+    }
+
+    public function report(callable|ReportBuilder $report): self
+    {
+        if ($report instanceof ReportBuilder) {
+            return $this->loadHTML($report->render());
+        }
+
+        $builder = ReportBuilder::make($this->direction);
+        $report($builder);
+
+        return $this->loadHTML($builder->render());
+    }
+
+    public function queuePipeline(?string $path = null): FileQueuePipeline
+    {
+        $path = $path ?? (string) ($this->config['queue']['path'] ?? '');
+        if ($path === '') {
+            $path = $this->safeStoragePath('app/laravel-arpdf/queue');
+        }
+
+        return new FileQueuePipeline($path);
     }
 
     public function useCache(bool $enabled = true, ?int $ttlSeconds = null): self
@@ -362,6 +408,39 @@ class ArPDF
     public function getEngine(): PdfEngine
     {
         return $this->engine;
+    }
+
+    public function exportState(): array
+    {
+        return [
+            'config' => $this->config,
+            'html_parts' => $this->htmlParts,
+            'css_parts' => $this->cssParts,
+            'direction' => $this->direction,
+            'runtime_options' => $this->runtimeOptions,
+            'cache' => [
+                'enabled' => $this->cacheEnabled,
+                'ttl_seconds' => $this->cacheTtlSeconds,
+            ],
+        ];
+    }
+
+    public static function fromState(array $state): self
+    {
+        $instance = new self(null, (array) ($state['config'] ?? []));
+        $instance->htmlParts = (array) ($state['html_parts'] ?? []);
+        $instance->cssParts = (array) ($state['css_parts'] ?? []);
+        $instance->direction = strtolower((string) ($state['direction'] ?? $instance->direction));
+        $instance->runtimeOptions = array_replace_recursive(
+            $instance->runtimeOptions,
+            (array) ($state['runtime_options'] ?? [])
+        );
+        $instance->cacheEnabled = (bool) (($state['cache']['enabled'] ?? false) === true);
+        $instance->cacheTtlSeconds = isset($state['cache']['ttl_seconds'])
+            ? (int) $state['cache']['ttl_seconds']
+            : null;
+
+        return $instance;
     }
 
     public function useEngine(PdfEngine $engine): self
@@ -599,9 +678,14 @@ class ArPDF
             ],
             'profiles' => [],
             'templates' => [],
+            'layouts' => [],
+            'components' => [],
             'cache' => [
                 'enabled' => false,
                 'ttl_seconds' => 3600,
+                'path' => '',
+            ],
+            'queue' => [
                 'path' => '',
             ],
         ];
@@ -620,6 +704,9 @@ class ArPDF
         }
         if (! isset($frameworkConfig['cache']['path'])) {
             $frameworkConfig['cache']['path'] = $this->safeStoragePath('app/laravel-arpdf/cache');
+        }
+        if (! isset($frameworkConfig['queue']['path'])) {
+            $frameworkConfig['queue']['path'] = $this->safeStoragePath('app/laravel-arpdf/queue');
         }
 
         $config = array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);

@@ -6,6 +6,7 @@ use Baidouabdellah\LaravelArpdf\ArPDF;
 use Baidouabdellah\LaravelArpdf\ArPdfDestination;
 use Baidouabdellah\LaravelArpdf\ArPdfParserMode;
 use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
+use Baidouabdellah\LaravelArpdf\Reports\ReportBuilder;
 use PHPUnit\Framework\TestCase;
 
 class ArPDFUnitTest extends TestCase
@@ -131,6 +132,66 @@ class ArPDFUnitTest extends TestCase
         $pdf->reset()->loadHTML('<h1>مرحبا</h1>')->output('doc.pdf', 'S');
 
         $this->assertSame(1, $engine->renderCalls);
+    }
+
+    public function testTemplateLayoutAndComponentRendering(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+
+        $pdf->registerLayout('base', '<html><body>{{ section:header }}{{ content }}{{ component:footer }}</body></html>')
+            ->registerComponent('footer', '<footer>{{ company }}</footer>')
+            ->registerTemplate('invoice', "@layout('base')\n@section('header')<h1>{{ title }}</h1>@endsection\n<p>{{ customer.name }}</p>")
+            ->loadTemplate('invoice', [
+                'title' => 'فاتورة',
+                'customer' => ['name' => 'أحمد'],
+                'components' => ['footer' => ['company' => 'Acme']],
+            ])
+            ->output('doc.pdf', 'S');
+
+        $this->assertStringContainsString('<h1>فاتورة</h1>', $engine->lastHtml);
+        $this->assertStringContainsString('<p>أحمد</p>', $engine->lastHtml);
+        $this->assertStringContainsString('<footer>Acme</footer>', $engine->lastHtml);
+    }
+
+    public function testReportBuilderCanBeLoadedIntoPdf(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+
+        $report = ReportBuilder::make('rtl')
+            ->heading('تقرير مبيعات')
+            ->paragraph('ملخص شهري')
+            ->table(['المنتج', 'الكمية'], [['A', 10], ['B', 20]]);
+
+        $pdf->report($report)->output('doc.pdf', 'S');
+
+        $this->assertStringContainsString('تقرير مبيعات', $engine->lastHtml);
+        $this->assertStringContainsString('الكمية', $engine->lastHtml);
+    }
+
+    public function testStateExportImportAndFileQueuePipeline(): void
+    {
+        $engine = new FakeEngine();
+        $queueDir = sys_get_temp_dir() . '/laravel-arpdf-test-queue-' . uniqid('', true);
+        $outputPath = sys_get_temp_dir() . '/laravel-arpdf-out-' . uniqid('', true) . '.pdf';
+
+        $pdf = new ArPDF($engine, [
+            'queue' => ['path' => $queueDir],
+        ]);
+        $pdf->loadHTML('<h1>queued</h1>');
+
+        $state = $pdf->exportState();
+        $restored = ArPDF::fromState($state)->useEngine($engine);
+        $restored->output('doc.pdf', 'S');
+        $this->assertStringContainsString('queued', $engine->lastHtml);
+
+        $pipeline = $pdf->queuePipeline($queueDir);
+        $pipeline->enqueue($pdf, $outputPath);
+        $processed = $pipeline->processNext();
+
+        $this->assertIsArray($processed);
+        $this->assertFileExists($outputPath);
     }
 }
 

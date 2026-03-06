@@ -24,6 +24,9 @@ Arabic-first PDF generation for Laravel, rebuilt from scratch on top of **mPDF**
 - Metadata API (`title`, `author`, `subject`, `keywords`, `creator`)
 - Reusable document profiles (`profile('invoice_ar')`)
 - Named templates with variable interpolation
+- Layouts and reusable components for templates
+- Report Builder DSL for business reports
+- File queue pipeline for deferred rendering
 - PDF render cache for repeated documents
 
 ## Installation
@@ -67,6 +70,29 @@ ArPDF::profile('invoice_ar')
     ])
     ->useCache(true, 3600)
     ->download('invoice.pdf');
+```
+
+## Layouts, Components, Reports, Queue
+
+```php
+$pdf = app(\Baidouabdellah\LaravelArpdf\ArPDF::class);
+
+$pdf->registerLayout('base', '<html><body>{{ section:header }}{{ content }}{{ component:footer }}</body></html>')
+    ->registerComponent('footer', '<footer>{{ company }}</footer>')
+    ->registerTemplate('invoice', \"@layout('base')\\n@section('header')<h1>{{ title }}</h1>@endsection\\n<p>{{ customer.name }}</p>\")
+    ->loadTemplate('invoice', [
+        'title' => 'فاتورة',
+        'customer' => ['name' => 'أحمد'],
+        'components' => ['footer' => ['company' => 'My Co']],
+    ]);
+
+$pdf->report(function ($r) {
+    $r->heading('تقرير شهري')->table(['البند', 'القيمة'], [['المبيعات', 15000]]);
+});
+
+$pipeline = $pdf->queuePipeline(); // file-based queue
+$jobId = $pipeline->enqueue($pdf, storage_path('app/reports/monthly.pdf'));
+$pipeline->processNext();
 ```
 
 ## Output Destinations
