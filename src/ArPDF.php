@@ -3,10 +3,14 @@
 namespace Baidouabdellah\LaravelArpdf;
 
 use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
+use Baidouabdellah\LaravelArpdf\Contracts\PdfPlugin;
 use Baidouabdellah\LaravelArpdf\Engines\MpdfEngine;
 use Baidouabdellah\LaravelArpdf\Pipelines\FileQueuePipeline;
+use Baidouabdellah\LaravelArpdf\Pipelines\LaravelQueuePipeline;
+use Baidouabdellah\LaravelArpdf\Plugins\PluginManager;
 use Baidouabdellah\LaravelArpdf\Reports\ReportBuilder;
 use Baidouabdellah\LaravelArpdf\Templates\TemplateEngine;
+use Baidouabdellah\LaravelArpdf\Testing\PdfSnapshotManager;
 use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -36,6 +40,8 @@ class ArPDF
 
     protected TemplateEngine $templateEngine;
 
+    protected PluginManager $pluginManager;
+
     protected bool $cacheEnabled = false;
 
     protected ?int $cacheTtlSeconds = null;
@@ -62,6 +68,7 @@ class ArPDF
             ? (int) $this->config['cache']['ttl_seconds']
             : null;
         $this->templateEngine = new TemplateEngine($this->templates, $this->layouts, $this->components);
+        $this->pluginManager = new PluginManager();
 
         $tempDir = (string) ($this->config['temp_dir'] ?? '');
         if ($tempDir !== '' && ! is_dir($tempDir)) {
@@ -317,6 +324,31 @@ class ArPDF
         return new FileQueuePipeline($path);
     }
 
+    public function laravelQueuePipeline(): LaravelQueuePipeline
+    {
+        return new LaravelQueuePipeline();
+    }
+
+    public function usePlugin(PdfPlugin $plugin): self
+    {
+        $this->pluginManager->register($plugin);
+        $this->cachedPdf = null;
+
+        return $this;
+    }
+
+    public function assertSnapshot(string $name, ?string $directory = null, bool $update = false): array
+    {
+        $bytes = $this->renderBinary();
+        $manager = new PdfSnapshotManager();
+        $directory = $directory ?: (string) ($this->config['snapshots']['path'] ?? '');
+        if ($directory === '') {
+            $directory = getcwd() . '/tests/__snapshots__';
+        }
+
+        return $manager->assertSnapshot($name, $bytes, $directory, $update);
+    }
+
     public function useCache(bool $enabled = true, ?int $ttlSeconds = null): self
     {
         $this->cacheEnabled = $enabled;
@@ -475,6 +507,10 @@ class ArPDF
 
         $options = $this->buildRenderOptions();
         $content = implode("\n", $this->htmlParts);
+        $pluginResult = $this->pluginManager->beforeRender($this, $content, $options);
+        $content = (string) ($pluginResult['html'] ?? $content);
+        $options = (array) ($pluginResult['options'] ?? $options);
+
         $cacheFile = $this->resolveCacheFile($content, $options);
         if ($cacheFile !== null && is_file($cacheFile)) {
             $this->cachedPdf = (string) file_get_contents($cacheFile);
@@ -483,6 +519,11 @@ class ArPDF
         }
 
         $this->cachedPdf = $this->engine->render($content, $options);
+        $this->cachedPdf = $this->pluginManager->afterRender($this, $this->cachedPdf, [
+            'content' => $content,
+            'options' => $options,
+            'cache_file' => $cacheFile,
+        ]);
         if ($cacheFile !== null) {
             file_put_contents($cacheFile, $this->cachedPdf);
         }
@@ -688,6 +729,9 @@ class ArPDF
             'queue' => [
                 'path' => '',
             ],
+            'snapshots' => [
+                'path' => '',
+            ],
         ];
 
         $frameworkConfig = [];
@@ -707,6 +751,9 @@ class ArPDF
         }
         if (! isset($frameworkConfig['queue']['path'])) {
             $frameworkConfig['queue']['path'] = $this->safeStoragePath('app/laravel-arpdf/queue');
+        }
+        if (! isset($frameworkConfig['snapshots']['path'])) {
+            $frameworkConfig['snapshots']['path'] = getcwd() . '/tests/__snapshots__';
         }
 
         $config = array_replace_recursive($defaultConfig, $frameworkConfig, $overrideConfig);

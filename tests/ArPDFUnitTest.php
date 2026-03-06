@@ -6,6 +6,8 @@ use Baidouabdellah\LaravelArpdf\ArPDF;
 use Baidouabdellah\LaravelArpdf\ArPdfDestination;
 use Baidouabdellah\LaravelArpdf\ArPdfParserMode;
 use Baidouabdellah\LaravelArpdf\Contracts\PdfEngine;
+use Baidouabdellah\LaravelArpdf\Contracts\PdfPlugin;
+use Baidouabdellah\LaravelArpdf\Pipelines\LaravelQueuePipeline;
 use Baidouabdellah\LaravelArpdf\Reports\ReportBuilder;
 use PHPUnit\Framework\TestCase;
 
@@ -193,6 +195,51 @@ class ArPDFUnitTest extends TestCase
         $this->assertIsArray($processed);
         $this->assertFileExists($outputPath);
     }
+
+    public function testPluginHooksCanModifyHtmlAndOutput(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+
+        $output = $pdf->usePlugin(new TestPlugin())
+            ->loadHTML('<p>body</p>')
+            ->output('doc.pdf', 'S');
+
+        $this->assertStringContainsString('plugin-before', $engine->lastHtml);
+        $this->assertStringContainsString('%PLUGIN-AFTER%', $output);
+    }
+
+    public function testSnapshotManagerFlow(): void
+    {
+        $engine = new FakeEngine();
+        $snapshotDir = sys_get_temp_dir() . '/laravel-arpdf-snapshots-' . uniqid('', true);
+        $pdf = new ArPDF($engine, [
+            'snapshots' => [
+                'path' => $snapshotDir,
+            ],
+        ]);
+
+        $pdf->loadHTML('<h1>snap</h1>');
+        $first = $pdf->assertSnapshot('invoice');
+        $second = $pdf->assertSnapshot('invoice');
+
+        $this->assertTrue($first['matched']);
+        $this->assertTrue($second['matched']);
+        $this->assertFileExists($snapshotDir . '/invoice.sha256');
+    }
+
+    public function testLaravelQueuePipelineFallbackDispatch(): void
+    {
+        $engine = new FakeEngine();
+        $pdf = new ArPDF($engine, []);
+        $pdf->loadHTML('<h1>queue</h1>');
+        $output = sys_get_temp_dir() . '/laravel-arpdf-lq-' . uniqid('', true) . '.pdf';
+
+        $pipeline = new LaravelQueuePipeline();
+        $pipeline->dispatchSync($pdf, $output);
+
+        $this->assertFileExists($output);
+    }
 }
 
 class FakeEngine implements PdfEngine
@@ -200,13 +247,31 @@ class FakeEngine implements PdfEngine
     public string $lastHtml = '';
     public array $lastOptions = [];
     public int $renderCalls = 0;
+    public string $lastBinary = '';
 
     public function render(string $html, array $options = []): string
     {
         $this->renderCalls++;
         $this->lastHtml = $html;
         $this->lastOptions = $options;
+        $this->lastBinary = '%PDF-FAKE%';
 
-        return '%PDF-FAKE%';
+        return $this->lastBinary;
+    }
+}
+
+class TestPlugin implements PdfPlugin
+{
+    public function beforeRender(ArPDF $pdf, string $html, array $options): array
+    {
+        return [
+            'html' => $html . '<div>plugin-before</div>',
+            'options' => $options,
+        ];
+    }
+
+    public function afterRender(ArPDF $pdf, string $binary, array $context): string
+    {
+        return $binary . '%PLUGIN-AFTER%';
     }
 }

@@ -27,6 +27,9 @@ Arabic-first PDF generation for Laravel, rebuilt from scratch on top of **mPDF**
 - Layouts and reusable components for templates
 - Report Builder DSL for business reports
 - File queue pipeline for deferred rendering
+- Laravel queue pipeline (`dispatch` / `dispatchSync`)
+- Plugin API (before/after render hooks)
+- Snapshot testing workflow for PDF regression checks
 - PDF render cache for repeated documents
 
 ## Installation
@@ -93,6 +96,30 @@ $pdf->report(function ($r) {
 $pipeline = $pdf->queuePipeline(); // file-based queue
 $jobId = $pipeline->enqueue($pdf, storage_path('app/reports/monthly.pdf'));
 $pipeline->processNext();
+
+$pdf->laravelQueuePipeline()->dispatchSync($pdf, storage_path('app/reports/sync.pdf'));
+```
+
+## Plugins & Snapshots
+
+```php
+use Baidouabdellah\LaravelArpdf\Contracts\PdfPlugin;
+
+class FooterPlugin implements PdfPlugin {
+    public function beforeRender($pdf, string $html, array $options): array {
+        return ['html' => $html . '<footer>Signed</footer>', 'options' => $options];
+    }
+    public function afterRender($pdf, string $binary, array $context): string {
+        return $binary;
+    }
+}
+
+$pdf->usePlugin(new FooterPlugin())->loadHTML('<h1>Doc</h1>');
+
+$result = $pdf->assertSnapshot('doc-v1'); // stores/compares sha256 snapshot
+if (! $result['matched']) {
+    // regression detected
+}
 ```
 
 ## Output Destinations
